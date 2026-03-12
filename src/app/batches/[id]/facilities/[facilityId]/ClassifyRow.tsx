@@ -25,19 +25,29 @@ export default function ClassifyRow({ recordId, currentClassification, currentNo
   const [selected, setSelected] = useState<Classification | null>(currentClassification as Classification | null);
   const [notes, setNotes] = useState(currentNotes);
   const [effectiveDate, setEffectiveDate] = useState(currentEffectiveDate);
-  const [showDetails, setShowDetails] = useState(false);
+  const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  // Still Employed doesn't need an effective date
+  const dateRequired = selected !== null && selected !== "STILL_EMPLOYED";
 
   function handleSelect(value: Classification) {
     setSelected(value);
-    setShowDetails(true);
+    setError("");
+    // Don't save yet if date is required but missing
+    if (value !== "STILL_EMPLOYED" && !effectiveDate) return;
     startTransition(async () => {
       await classifyEmployee(recordId, value, notes, effectiveDate);
     });
   }
 
-  function handleDetailsChange() {
+  function handleSave() {
     if (!selected) return;
+    if (dateRequired && !effectiveDate) {
+      setError("Effective date is required.");
+      return;
+    }
+    setError("");
     startTransition(async () => {
       await classifyEmployee(recordId, selected, notes, effectiveDate);
     });
@@ -60,27 +70,32 @@ export default function ClassifyRow({ recordId, currentClassification, currentNo
         ))}
       </div>
 
-      {(showDetails || selected) && (
-        <div className="flex gap-2 items-center">
-          <input
-            type="date"
-            value={effectiveDate}
-            onChange={(e) => setEffectiveDate(e.target.value)}
-            onBlur={handleDetailsChange}
-            placeholder="Effective date"
-            className="border rounded px-2 py-1 text-xs w-32"
-          />
+      {selected && (
+        <div className="flex gap-2 items-center flex-wrap justify-end">
+          <div className="flex flex-col items-end gap-0.5">
+            <input
+              type="date"
+              value={effectiveDate}
+              onChange={(e) => { setEffectiveDate(e.target.value); setError(""); }}
+              onBlur={handleSave}
+              className={`border rounded px-2 py-1 text-xs w-32 ${dateRequired && !effectiveDate ? "border-red-400" : ""}`}
+            />
+            {dateRequired && !effectiveDate && (
+              <span className="text-xs text-red-500">Required</span>
+            )}
+          </div>
           <input
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            onBlur={handleDetailsChange}
+            onBlur={handleSave}
             placeholder="Notes..."
             className="border rounded px-2 py-1 text-xs w-40"
           />
         </div>
       )}
 
+      {error && <span className="text-xs text-red-500">{error}</span>}
       {isPending && <span className="text-xs text-gray-400">Saving...</span>}
     </div>
   );
