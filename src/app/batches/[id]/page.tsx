@@ -124,7 +124,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                         )}
                       </td>
                       <td className="py-3 px-4">
-                        <Link href={`/batches/${id}/classify/${fg.facilityId}`} className="text-sm text-blue-600 hover:text-blue-800 hover:underline">Classify</Link>
+                        <Link href={`/batches/${id}/facilities/${fg.facilityId}`} className="text-sm text-blue-600 hover:text-blue-800 hover:underline">Classify</Link>
                       </td>
                     </tr>
                   );
