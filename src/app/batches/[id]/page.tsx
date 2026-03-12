@@ -11,12 +11,10 @@ import { checkAndWakeExpiredSnoozes } from "../actions";
 import Link from "next/link";
 
 const statusColors: Record<string, string> = {
-  PENDING_OUTREACH: "bg-gray-100 text-gray-700",
-  AWAITING_REPLY: "bg-yellow-100 text-yellow-700",
+  DRAFT: "bg-gray-100 text-gray-700",
+  SENT: "bg-yellow-100 text-yellow-700",
   REPLIED: "bg-blue-100 text-blue-700",
-  IN_REVIEW: "bg-orange-100 text-orange-700",
   INCOMPLETE: "bg-red-100 text-red-700",
-  SNOOZED: "bg-purple-100 text-purple-700",
   DONE: "bg-green-100 text-green-700",
 };
 
@@ -122,7 +120,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
               </thead>
               <tbody>
                 {facilityGroups.map((fg) => {
-                  const displayStatus = fg.outreachStatus ?? "PENDING_OUTREACH";
+                  const displayStatus = fg.outreachStatus ?? "DRAFT";
                   return (
                     <tr key={fg.facilityId} className="border-b hover:bg-gray-50">
                       <td className="py-3 px-4 font-medium">
@@ -133,12 +131,19 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                       <td className="py-3 px-4 text-gray-500">{fg.recordCount}</td>
                       <td className="py-3 px-4">
                         {fg.outreachId ? (
-                          <OutreachStatusSelect
-                            outreachId={fg.outreachId}
-                            currentStatus={displayStatus}
-                          />
+                          <div className="flex flex-col gap-1">
+                            <OutreachStatusSelect
+                              outreachId={fg.outreachId}
+                              currentStatus={displayStatus}
+                            />
+                            {fg.snoozeUntil && new Date(fg.snoozeUntil) > new Date() && (
+                              <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full inline-flex w-fit">
+                                Snoozed until {new Date(fg.snoozeUntil).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
                         ) : (
-                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${statusColors[displayStatus]}`}>
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${statusColors[displayStatus] ?? "bg-gray-100 text-gray-700"}`}>
                             {displayStatus}
                           </span>
                         )}

@@ -1,14 +1,17 @@
 import {
-  pgTable, uuid, text, timestamp, integer, boolean, pgEnum, json, uniqueIndex
+  pgTable, uuid, text, timestamp, integer, boolean, pgEnum, json, uniqueIndex, bigserial, jsonb
 } from "drizzle-orm/pg-core";
 
 export const fileTypeEnum = pgEnum("file_type", ["CSV", "XLSX", "PDF"]);
 export const batchStatusEnum = pgEnum("batch_status", ["DRAFT", "IN_PROGRESS", "SUBMITTED", "CLOSED"]);
 export const facilityStatusEnum = pgEnum("facility_status", [
-  "PENDING_OUTREACH", "AWAITING_REPLY", "REPLIED", "IN_REVIEW", "INCOMPLETE", "SNOOZED", "DONE"
+  "DRAFT", "SENT", "REPLIED", "INCOMPLETE", "DONE"
 ]);
 export const classificationEnum = pgEnum("classification", [
   "STILL_EMPLOYED", "TERMINATED", "QUIT", "SICK_LEAVE", "FAMILY_LEAVE", "OTHER"
+]);
+export const inboundEmailStatusEnum = pgEnum("inbound_email_status", [
+  "PENDING", "MATCHED", "FAILED", "IGNORED"
 ]);
 
 export const carriers = pgTable("carriers", {
@@ -55,17 +58,21 @@ export const auditRecords = pgTable("audit_records", {
   classifiedBy: text("classified_by"),
   classifiedAt: timestamp("classified_at"),
   createdAt: timestamp("created_at").defaultNow(),
+  version: integer("version").default(1),
 });
 
 export const facilityOutreaches = pgTable("facility_outreaches", {
   id: uuid("id").primaryKey().defaultRandom(),
   batchId: uuid("batch_id").notNull().references(() => auditBatches.id),
   facilityId: uuid("facility_id").notNull().references(() => facilities.id),
-  status: facilityStatusEnum("status").default("PENDING_OUTREACH"),
+  status: facilityStatusEnum("status").default("DRAFT"),
   emailBodyHtml: text("email_body_html"),
   reviewApproved: boolean("review_approved").default(false),
   sentAt: timestamp("sent_at"),
   trackingId: text("tracking_id"),
+  trackingCode: text("tracking_code"),
+  graphMessageId: text("graph_message_id"),
+  graphConversationId: text("graph_conversation_id"),
   replyRaw: text("reply_raw"),
   repliedAt: timestamp("replied_at"),
   incompleteReason: text("incomplete_reason"),
@@ -73,5 +80,31 @@ export const facilityOutreaches = pgTable("facility_outreaches", {
   lastReminderAt: timestamp("last_reminder_at"),
   reminderCount: integer("reminder_count").default(0),
   doneAt: timestamp("done_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  version: integer("version").default(1),
+});
+
+export const inboundEmails = pgTable("inbound_emails", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  graphMessageId: text("graph_message_id").unique().notNull(),
+  graphConversationId: text("graph_conversation_id").notNull(),
+  fromAddress: text("from_address").notNull(),
+  subject: text("subject").notNull(),
+  bodyText: text("body_text"),
+  bodyHtml: text("body_html"),
+  receivedAt: timestamp("received_at").notNull(),
+  processingStatus: inboundEmailStatusEnum("processing_status").default("PENDING"),
+  matchedOutreachId: uuid("matched_outreach_id").references(() => facilityOutreaches.id),
+  failureReason: text("failure_reason"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const auditLogs = pgTable("audit_logs", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: uuid("entity_id").notNull(),
+  beforeState: jsonb("before_state"),
+  afterState: jsonb("after_state"),
   createdAt: timestamp("created_at").defaultNow(),
 });

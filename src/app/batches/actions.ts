@@ -3,7 +3,8 @@ import { db } from "@/db";
 import { auditBatches, auditRecords, facilities, facilityOutreaches } from "@/db/schema";
 import { autoDetectAndParse, autoDetectAndPreview } from "@/lib/parsers/auto-detect";
 import { revalidatePath } from "next/cache";
-import { eq, and, lte, sql } from "drizzle-orm";
+import { eq, and, lte, isNotNull, sql } from "drizzle-orm";
+import { type OutreachStatus, assertValidTransition } from "@/lib/outreach-transitions";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -124,7 +125,7 @@ export async function ingestBatch(formData: FormData) {
       await tx.insert(facilityOutreaches).values({
         batchId: batch.id,
         facilityId,
-        status: "PENDING_OUTREACH",
+        status: "DRAFT",
       });
     }
 
@@ -141,14 +142,17 @@ export async function listBatches() {
 
 export async function updateOutreachStatus(
   outreachId: string,
-  status: "PENDING_OUTREACH" | "AWAITING_REPLY" | "REPLIED" | "IN_REVIEW" | "INCOMPLETE" | "SNOOZED" | "DONE"
+  status: OutreachStatus
 ): Promise<void> {
   const existing = await db
-    .select({ id: facilityOutreaches.id, batchId: facilityOutreaches.batchId })
+    .select({ id: facilityOutreaches.id, batchId: facilityOutreaches.batchId, status: facilityOutreaches.status })
     .from(facilityOutreaches)
     .where(eq(facilityOutreaches.id, outreachId));
 
   if (existing.length === 0) throw new Error(`Outreach record not found: ${outreachId}`);
+
+  const currentStatus = existing[0].status as OutreachStatus;
+  assertValidTransition(currentStatus, status);
 
   await db
     .update(facilityOutreaches)
@@ -171,9 +175,10 @@ export async function snoozeFacility(outreachId: string, durationDays: number): 
 
   const snoozeUntil = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
 
+  // Snooze sets snoozeUntil only — does NOT change status
   await db
     .update(facilityOutreaches)
-    .set({ status: "SNOOZED", snoozeUntil })
+    .set({ snoozeUntil })
     .where(eq(facilityOutreaches.id, outreachId));
 
   revalidatePath(`/batches/${existing[0].batchId}`);
@@ -188,9 +193,10 @@ export async function wakeFacility(outreachId: string): Promise<void> {
 
   if (existing.length === 0) throw new Error(`Outreach record not found: ${outreachId}`);
 
+  // Wake clears snoozeUntil only — does NOT change status
   await db
     .update(facilityOutreaches)
-    .set({ status: "AWAITING_REPLY", snoozeUntil: null })
+    .set({ snoozeUntil: null })
     .where(eq(facilityOutreaches.id, outreachId));
 
   revalidatePath(`/batches/${existing[0].batchId}`);
@@ -218,13 +224,14 @@ export async function logReminder(outreachId: string): Promise<void> {
 }
 
 export async function checkAndWakeExpiredSnoozes(batchId: string): Promise<void> {
+  // Clear snoozeUntil for expired snoozes — does NOT change status
   await db
     .update(facilityOutreaches)
-    .set({ status: "AWAITING_REPLY", snoozeUntil: null })
+    .set({ snoozeUntil: null })
     .where(
       and(
         eq(facilityOutreaches.batchId, batchId),
-        eq(facilityOutreaches.status, "SNOOZED"),
+        isNotNull(facilityOutreaches.snoozeUntil),
         lte(facilityOutreaches.snoozeUntil, new Date())
       )
     );

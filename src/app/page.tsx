@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { db } from "@/db";
 import { auditBatches, carriers, facilityOutreaches } from "@/db/schema";
-import { eq, count } from "drizzle-orm";
+import { eq, count, and, isNotNull, gt } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
@@ -20,10 +20,10 @@ export default async function DashboardPage() {
     .leftJoin(carriers, eq(auditBatches.carrierId, carriers.id))
     .orderBy(auditBatches.receivedAt);
 
-  const awaitingReply = await db
+  const sent = await db
     .select({ count: count() })
     .from(facilityOutreaches)
-    .where(eq(facilityOutreaches.status, "AWAITING_REPLY"));
+    .where(eq(facilityOutreaches.status, "SENT"));
   const incomplete = await db
     .select({ count: count() })
     .from(facilityOutreaches)
@@ -31,7 +31,12 @@ export default async function DashboardPage() {
   const snoozed = await db
     .select({ count: count() })
     .from(facilityOutreaches)
-    .where(eq(facilityOutreaches.status, "SNOOZED"));
+    .where(
+      and(
+        isNotNull(facilityOutreaches.snoozeUntil),
+        gt(facilityOutreaches.snoozeUntil, new Date())
+      )
+    );
   const done = await db
     .select({ count: count() })
     .from(facilityOutreaches)
@@ -47,8 +52,8 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-yellow-600">{awaitingReply[0]?.count ?? 0}</div>
-            <div className="text-sm text-gray-500">Awaiting Reply</div>
+            <div className="text-2xl font-bold text-yellow-600">{sent[0]?.count ?? 0}</div>
+            <div className="text-sm text-gray-500">Sent / Awaiting Reply</div>
           </CardContent>
         </Card>
         <Card>

@@ -29,7 +29,9 @@ export default function FacilityRowActions({
   const [isPending, startTransition] = useTransition();
   const [showSnooze, setShowSnooze] = useState(false);
 
-  const isSnoozed = status === "SNOOZED";
+  // Snoozed is now a column modifier: snoozeUntil != null and in the future
+  const now = new Date();
+  const isSnoozed = snoozeUntil != null && new Date(snoozeUntil) > now;
   const isDone = status === "DONE";
   const canRemind = !isSnoozed && !isDone;
 
@@ -57,8 +59,8 @@ export default function FacilityRowActions({
       <div className="flex items-center gap-2 flex-wrap">
         {isSnoozed ? (
           <>
-            <span className="text-xs text-purple-600">
-              Until {snoozeUntil ? new Date(snoozeUntil).toLocaleDateString() : "—"}
+            <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+              Snoozed until {snoozeUntil ? new Date(snoozeUntil).toLocaleDateString() : "—"}
             </span>
             <button
               onClick={handleWake}

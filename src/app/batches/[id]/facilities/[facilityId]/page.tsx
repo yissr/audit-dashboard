@@ -80,7 +80,7 @@ export default async function ClassificationPage({
         <FacilityActions
           outreachId={outreach.id}
           batchId={batchId}
-          currentStatus={outreach.status ?? "PENDING_OUTREACH"}
+          currentStatus={outreach.status ?? "DRAFT"}
           classifiedCount={classifiedCount}
           totalCount={records.length}
         />

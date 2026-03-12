@@ -2,26 +2,21 @@
 
 import { useTransition } from "react";
 import { updateOutreachStatus } from "../actions";
+import { type OutreachStatus } from "@/lib/outreach-transitions";
 
-const STATUS_OPTIONS = [
-  "PENDING_OUTREACH",
-  "AWAITING_REPLY",
+const STATUS_OPTIONS: OutreachStatus[] = [
+  "DRAFT",
+  "SENT",
   "REPLIED",
-  "IN_REVIEW",
   "INCOMPLETE",
-  "SNOOZED",
   "DONE",
-] as const;
+];
 
-type FacilityStatus = (typeof STATUS_OPTIONS)[number];
-
-const statusColors: Record<FacilityStatus, string> = {
-  PENDING_OUTREACH: "bg-gray-100 text-gray-700",
-  AWAITING_REPLY: "bg-yellow-100 text-yellow-700",
+const statusColors: Record<OutreachStatus, string> = {
+  DRAFT: "bg-gray-100 text-gray-700",
+  SENT: "bg-yellow-100 text-yellow-700",
   REPLIED: "bg-blue-100 text-blue-700",
-  IN_REVIEW: "bg-orange-100 text-orange-700",
   INCOMPLETE: "bg-red-100 text-red-700",
-  SNOOZED: "bg-purple-100 text-purple-700",
   DONE: "bg-green-100 text-green-700",
 };
 
@@ -36,12 +31,12 @@ export default function OutreachStatusSelect({
 }: OutreachStatusSelectProps) {
   const [isPending, startTransition] = useTransition();
 
-  const safeStatus = STATUS_OPTIONS.includes(currentStatus as FacilityStatus)
-    ? (currentStatus as FacilityStatus)
-    : "PENDING_OUTREACH";
+  const safeStatus: OutreachStatus = STATUS_OPTIONS.includes(currentStatus as OutreachStatus)
+    ? (currentStatus as OutreachStatus)
+    : "DRAFT";
 
   function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const newStatus = e.target.value as FacilityStatus;
+    const newStatus = e.target.value as OutreachStatus;
     startTransition(async () => {
       await updateOutreachStatus(outreachId, newStatus);
     });
