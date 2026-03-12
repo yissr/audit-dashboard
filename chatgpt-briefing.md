@@ -76,3 +76,21 @@ Workers' Compensation Audit Dashboard built with Next.js 16, Drizzle ORM, Neon P
 **Key decisions:** Generic memberFilterField/memberFilterValue in GroupByFieldConfig avoids per-carrier filter logic. File parsed twice (preview + ingest) to keep architecture simple. Server/client split for upload page.
 **Issues encountered:** Mo Census sample file had all Type="01" (no dependents to filter). Test adjusted to accept this as valid.
 **Open items:** No end-to-end UI test for the facility review flow. File parsed twice per upload (acceptable for <10MB files).
+
+### Run: /build — 2026-03-12
+**Task:** Schema migration v2 — status enum rename, new tables (inboundEmails, auditLogs), snooze column-modifier refactor, webhook handler
+**Outcome:** APPROVED WITH RECOMMENDATIONS
+**Iterations:** 3 (two build failures before passing)
+**Files created/modified:**
+- `src/db/schema.ts` — enum restructured, new tables, new columns
+- `src/app/batches/actions.ts` — status rename, snooze/wake fix, transition guard integrated
+- `src/lib/outreach-transitions.ts` (new) — OutreachStatus type + assertValidTransition()
+- `src/app/batches/[id]/OutreachStatusSelect.tsx` — removed SNOOZED/IN_REVIEW
+- `src/app/batches/[id]/FacilityRowActions.tsx` — snooze badge uses snoozeUntil column not status
+- `src/app/batches/[id]/page.tsx` — status colors updated, snooze badge added
+- `src/app/page.tsx` — dashboard queries updated (SENT replaces AWAITING_REPLY, snoozed uses column query)
+- `src/app/batches/[id]/facilities/[facilityId]/page.tsx` — fallback status DRAFT
+- `src/app/api/webhooks/inbox/route.ts` (new) — Power Automate webhook handler
+**Key decisions:** assertValidTransition extracted to src/lib/ (non-"use server") because Next.js 16 Turbopack rejects sync exports from server action files. export type re-exports also rejected by Turbopack's server action bundler — types must be imported directly from lib module.
+**Issues encountered:** Next.js 16 "Server Actions must be async functions" error for any non-async export from a "use server" file (including sync helpers and type re-exports). Resolved by moving type + guard to separate lib module. drizzle-kit push not runnable in CI (Neon WebSocket requires live DATABASE_URL).
+**Open items:** User must run data migration SQL before drizzle-kit push to update existing rows with old enum values (SNOOZED→SENT, IN_REVIEW→REPLIED, PENDING_OUTREACH→DRAFT, AWAITING_REPLY→SENT). Webhook REPLIED transition bypasses assertValidTransition by design (automated path).
