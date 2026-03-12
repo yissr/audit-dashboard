@@ -96,6 +96,15 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
         </CardContent>
       </Card>
 
+      <div className="flex justify-end">
+        <Link
+          href={`/batches/${id}/submit`}
+          className="inline-flex items-center px-4 py-2 rounded-md bg-[#1B2A4A] text-white text-sm font-medium hover:bg-[#2a3f6b]"
+        >
+          Submit to Carrier →
+        </Link>
+      </div>
+
       <div>
         <h2 className="text-lg font-semibold mb-3">Facilities ({totalFacilities})</h2>
         {facilityGroups.length === 0 ? (

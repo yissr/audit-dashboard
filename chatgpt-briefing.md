@@ -48,3 +48,15 @@ Workers' Compensation Audit Dashboard built with Next.js 16, Drizzle ORM, Neon P
 **Key decisions:** Route placed at `/facilities/[facilityId]` under batch (not `/classify/`). markFacilityDone validates all records classified server-side. classifiedBy hardcoded to "dashboard-user" until auth is added.
 **Issues encountered:** Two parallel agents built at different route paths (`/classify/` vs `/facilities/`). Converged on `/facilities/` path. Fixed dead link in follow-up commit.
 **Open items:** No auth system yet (classifiedBy is hardcoded). Phase 2 email pipeline still skipped.
+
+### Run: /build — 2026-03-12 (2)
+**Task:** Phase 4 — Snooze and Reminder Tracking
+**Outcome:** APPROVED
+**Iterations:** 1
+**Files created/modified:**
+- `src/app/batches/actions.ts` (modified — added snoozeFacility, wakeFacility, logReminder, checkAndWakeExpiredSnoozes)
+- `src/app/batches/[id]/FacilityRowActions.tsx` (new — client component with snooze/wake/reminder buttons)
+- `src/app/batches/[id]/page.tsx` (modified — fetch reminder fields, call checkAndWakeExpiredSnoozes on load)
+**Key decisions:** Inline snooze duration picker (button list) instead of dialog+form for simplicity. Expired snoozes auto-wake on page load via server-side check. Reminder button just increments count (actual email sending deferred to Phase 2).
+**Issues encountered:** None.
+**Open items:** Send Reminder is UI-only (no email). Phase 2 email pipeline still skipped.
