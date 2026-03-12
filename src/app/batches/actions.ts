@@ -1,8 +1,10 @@
 "use server";
 import { db } from "@/db";
-import { auditBatches, auditRecords, facilities, facilityOutreaches } from "@/db/schema";
+import { auditBatches, auditRecords, carriers, facilities, facilityOutreaches } from "@/db/schema";
 import { parseCsvBuffer } from "@/lib/parsers/csv";
 import { parseXlsxBuffer } from "@/lib/parsers/xlsx";
+import { parseMoCensusBuffer } from "@/lib/parsers/mo-census";
+import { parseGroupByFieldBuffer } from "@/lib/parsers/group-by-field";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 
@@ -17,20 +19,44 @@ export async function ingestBatch(formData: FormData) {
   if (!file || file.size === 0) throw new Error("File is required");
   if (file.size > MAX_FILE_SIZE) throw new Error("File exceeds 10 MB limit");
 
-  const columnMapping: Record<string, string> = columnMappingRaw?.trim()
+  // Load carrier to get its parser config
+  const [carrier] = await db.select().from(carriers).where(eq(carriers.id, carrierId));
+  if (!carrier) throw new Error("Carrier not found");
+
+  // Column mapping: prefer form override, fall back to carrier config
+  const carrierMapping = (carrier.columnMapping ?? {}) as Record<string, string>;
+  const formMapping: Record<string, string> = columnMappingRaw?.trim()
     ? JSON.parse(columnMappingRaw)
     : {};
+  const columnMapping = Object.keys(formMapping).length > 0 ? formMapping : carrierMapping;
+
+  const parserType = (columnMapping._parser ?? "standard") as string;
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const fileName = file.name.toLowerCase();
 
   let employees;
-  if (fileName.endsWith(".csv")) {
-    employees = parseCsvBuffer(buffer, columnMapping);
-  } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
-    employees = parseXlsxBuffer(buffer, columnMapping);
+
+  if (parserType === "mo-census") {
+    employees = parseMoCensusBuffer(buffer);
+  } else if (parserType === "group-by-field") {
+    employees = parseGroupByFieldBuffer(buffer, {
+      facilityField: columnMapping._facilityField,
+      firstNameField: columnMapping._firstNameField,
+      lastNameField: columnMapping._lastNameField || undefined,
+      memberIdField: columnMapping._memberIdField || undefined,
+      ssnField: columnMapping._ssnField || undefined,
+      facilityPrefix: columnMapping._facilityPrefix || undefined,
+    });
   } else {
-    throw new Error("Unsupported file type. Upload a CSV or XLSX file.");
+    // Standard parser: use column mapping or direct headers
+    if (fileName.endsWith(".csv")) {
+      employees = parseCsvBuffer(buffer, columnMapping);
+    } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
+      employees = parseXlsxBuffer(buffer, columnMapping);
+    } else {
+      throw new Error("Unsupported file type. Upload a CSV or XLSX file.");
+    }
   }
 
   if (employees.length === 0) throw new Error("No employee records found in file");
@@ -48,7 +74,6 @@ export async function ingestBatch(formData: FormData) {
       status: "DRAFT",
     }).returning();
 
-    // Track unique facilityIds seen in this batch for outreach creation
     const batchFacilityIds = new Set<string>();
 
     for (const emp of employees) {
@@ -75,7 +100,6 @@ export async function ingestBatch(formData: FormData) {
       });
     }
 
-    // Insert one facilityOutreaches row per unique facility in this batch
     for (const facilityId of batchFacilityIds) {
       await tx.insert(facilityOutreaches).values({
         batchId: batch.id,
@@ -104,9 +128,7 @@ export async function updateOutreachStatus(
     .from(facilityOutreaches)
     .where(eq(facilityOutreaches.id, outreachId));
 
-  if (existing.length === 0) {
-    throw new Error(`Outreach record not found: ${outreachId}`);
-  }
+  if (existing.length === 0) throw new Error(`Outreach record not found: ${outreachId}`);
 
   await db
     .update(facilityOutreaches)
