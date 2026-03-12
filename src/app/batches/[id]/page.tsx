@@ -6,6 +6,8 @@ import { eq, count, and } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import OutreachStatusSelect from "./OutreachStatusSelect";
+import FacilityRowActions from "./FacilityRowActions";
+import { checkAndWakeExpiredSnoozes } from "../actions";
 import Link from "next/link";
 
 const statusColors: Record<string, string> = {
@@ -35,6 +37,9 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
 
   if (!batch) notFound();
 
+  // Wake any expired snoozes before rendering
+  await checkAndWakeExpiredSnoozes(id);
+
   const facilityGroups = await db
     .select({
       facilityId: auditRecords.facilityId,
@@ -42,6 +47,9 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
       recordCount: count(auditRecords.id),
       outreachId: facilityOutreaches.id,
       outreachStatus: facilityOutreaches.status,
+      snoozeUntil: facilityOutreaches.snoozeUntil,
+      reminderCount: facilityOutreaches.reminderCount,
+      lastReminderAt: facilityOutreaches.lastReminderAt,
     })
     .from(auditRecords)
     .leftJoin(facilities, eq(auditRecords.facilityId, facilities.id))
@@ -57,7 +65,10 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
       auditRecords.facilityId,
       facilities.name,
       facilityOutreaches.id,
-      facilityOutreaches.status
+      facilityOutreaches.status,
+      facilityOutreaches.snoozeUntil,
+      facilityOutreaches.reminderCount,
+      facilityOutreaches.lastReminderAt
     );
 
   const totalFacilities = facilityGroups.length;
@@ -97,7 +108,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                   <th className="text-left py-3 px-4 font-medium">Facility</th>
                   <th className="text-left py-3 px-4 font-medium">Employees</th>
                   <th className="text-left py-3 px-4 font-medium">Status</th>
-                  <th className="text-left py-3 px-4 font-medium">Action</th>
+                  <th className="text-left py-3 px-4 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -124,7 +135,18 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                         )}
                       </td>
                       <td className="py-3 px-4">
-                        <Link href={`/batches/${id}/facilities/${fg.facilityId}`} className="text-sm text-blue-600 hover:text-blue-800 hover:underline">Classify</Link>
+                        <div className="flex flex-col gap-1">
+                          <Link href={`/batches/${id}/facilities/${fg.facilityId}`} className="text-sm text-blue-600 hover:text-blue-800 hover:underline">Classify</Link>
+                          {fg.outreachId && (
+                            <FacilityRowActions
+                              outreachId={fg.outreachId}
+                              status={displayStatus}
+                              snoozeUntil={fg.snoozeUntil ? fg.snoozeUntil.toISOString() : null}
+                              reminderCount={fg.reminderCount ?? 0}
+                              lastReminderAt={fg.lastReminderAt ? fg.lastReminderAt.toISOString() : null}
+                            />
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

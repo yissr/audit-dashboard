@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { auditBatches, auditRecords, facilities, facilityOutreaches } from "@/db/schema";
 import { autoDetectAndParse } from "@/lib/parsers/auto-detect";
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { eq, and, lte, sql } from "drizzle-orm";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -96,4 +96,75 @@ export async function updateOutreachStatus(
 
   revalidatePath(`/batches/${existing[0].batchId}`);
   revalidatePath("/");
+}
+
+export async function snoozeFacility(outreachId: string, durationDays: number): Promise<void> {
+  if (durationDays <= 0) throw new Error("Snooze duration must be positive");
+
+  const existing = await db
+    .select({ id: facilityOutreaches.id, batchId: facilityOutreaches.batchId })
+    .from(facilityOutreaches)
+    .where(eq(facilityOutreaches.id, outreachId));
+
+  if (existing.length === 0) throw new Error(`Outreach record not found: ${outreachId}`);
+
+  const snoozeUntil = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
+
+  await db
+    .update(facilityOutreaches)
+    .set({ status: "SNOOZED", snoozeUntil })
+    .where(eq(facilityOutreaches.id, outreachId));
+
+  revalidatePath(`/batches/${existing[0].batchId}`);
+  revalidatePath("/");
+}
+
+export async function wakeFacility(outreachId: string): Promise<void> {
+  const existing = await db
+    .select({ id: facilityOutreaches.id, batchId: facilityOutreaches.batchId })
+    .from(facilityOutreaches)
+    .where(eq(facilityOutreaches.id, outreachId));
+
+  if (existing.length === 0) throw new Error(`Outreach record not found: ${outreachId}`);
+
+  await db
+    .update(facilityOutreaches)
+    .set({ status: "AWAITING_REPLY", snoozeUntil: null })
+    .where(eq(facilityOutreaches.id, outreachId));
+
+  revalidatePath(`/batches/${existing[0].batchId}`);
+  revalidatePath("/");
+}
+
+export async function logReminder(outreachId: string): Promise<void> {
+  const existing = await db
+    .select({ id: facilityOutreaches.id, batchId: facilityOutreaches.batchId })
+    .from(facilityOutreaches)
+    .where(eq(facilityOutreaches.id, outreachId));
+
+  if (existing.length === 0) throw new Error(`Outreach record not found: ${outreachId}`);
+
+  await db
+    .update(facilityOutreaches)
+    .set({
+      reminderCount: sql`${facilityOutreaches.reminderCount} + 1`,
+      lastReminderAt: new Date(),
+    })
+    .where(eq(facilityOutreaches.id, outreachId));
+
+  revalidatePath(`/batches/${existing[0].batchId}`);
+  revalidatePath("/");
+}
+
+export async function checkAndWakeExpiredSnoozes(batchId: string): Promise<void> {
+  await db
+    .update(facilityOutreaches)
+    .set({ status: "AWAITING_REPLY", snoozeUntil: null })
+    .where(
+      and(
+        eq(facilityOutreaches.batchId, batchId),
+        eq(facilityOutreaches.status, "SNOOZED"),
+        lte(facilityOutreaches.snoozeUntil, new Date())
+      )
+    );
 }
