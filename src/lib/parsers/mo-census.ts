@@ -37,6 +37,10 @@ export function parseMoCensusBuffer(buffer: Buffer): ParsedEmployee[] {
     const memberId = (row[0] as string).trim();
     if (!memberId || memberId === "ID") continue;
 
+    // Filter: only keep subscribers (Type "01"), skip dependents
+    const type = (row[1] ?? "").toString().trim();
+    if (type !== "01") continue;
+
     const name = (row[3] as string).trim();
     if (!name) continue;
 

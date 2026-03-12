@@ -54,6 +54,8 @@ export function autoDetectAndParse(
         lastNameField: "MemberLastName",
         memberIdField: "SubscriberNumber",
         ssnField: "SocialSecurityNumber",
+        memberFilterField: "RelationshipCode",
+        memberFilterValue: "1",
       }),
     };
   }
@@ -69,6 +71,8 @@ export function autoDetectAndParse(
         lastNameField: "Last Name",
         memberIdField: "Member ID",
         ssnField: "",
+        memberFilterField: "Relationship",
+        memberFilterValue: "Member",
       }),
     };
   }
@@ -79,4 +83,27 @@ export function autoDetectAndParse(
     : parseXlsxBuffer(buffer, columnMapping);
 
   return { employees, detectedFormat: "Standard" };
+}
+
+/**
+ * Parses a file and returns a preview of detected facilities with employee counts.
+ * Used by the upload review step before final ingestion.
+ */
+export function autoDetectAndPreview(
+  buffer: Buffer,
+  fileName: string
+): { detectedFormat: string; facilities: { name: string; employeeCount: number }[] } {
+  const { employees, detectedFormat } = autoDetectAndParse(buffer, fileName);
+
+  const countMap = new Map<string, number>();
+  for (const emp of employees) {
+    if (!emp.facilityName) continue;
+    countMap.set(emp.facilityName, (countMap.get(emp.facilityName) ?? 0) + 1);
+  }
+
+  const facilities = Array.from(countMap.entries())
+    .map(([name, employeeCount]) => ({ name, employeeCount }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return { detectedFormat, facilities };
 }

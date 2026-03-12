@@ -14,6 +14,10 @@ export interface GroupByFieldConfig {
   ssnField?: string;
   /** Prefix prepended to facility field value, e.g. "Division " or "Location " */
   facilityPrefix?: string;
+  /** Column to check for member/subscriber filtering (e.g. "Relationship", "RelationshipCode") */
+  memberFilterField?: string;
+  /** Value that identifies a primary member (e.g. "Member", "1") */
+  memberFilterValue?: string;
 }
 
 export function parseGroupByFieldBuffer(
@@ -35,6 +39,12 @@ export function parseGroupByFieldBuffer(
   for (const row of rows) {
     const facilityCode = (row[config.facilityField] ?? "").toString().trim();
     if (!facilityCode) continue;
+
+    // Filter: only keep primary members if filter is configured
+    if (config.memberFilterField) {
+      const filterVal = (row[config.memberFilterField] ?? "").toString().trim();
+      if (filterVal !== config.memberFilterValue) continue;
+    }
 
     const facilityName = `${config.facilityPrefix ?? ""}${facilityCode}`;
 

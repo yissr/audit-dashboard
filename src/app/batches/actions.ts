@@ -1,11 +1,45 @@
 "use server";
 import { db } from "@/db";
 import { auditBatches, auditRecords, facilities, facilityOutreaches } from "@/db/schema";
-import { autoDetectAndParse } from "@/lib/parsers/auto-detect";
+import { autoDetectAndParse, autoDetectAndPreview } from "@/lib/parsers/auto-detect";
 import { revalidatePath } from "next/cache";
 import { eq, and, lte, sql } from "drizzle-orm";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+export type FacilityMapping = {
+  detectedName: string;
+  action: "create" | "match";
+  newName?: string;
+  existingId?: string;
+};
+
+export async function previewFile(formData: FormData): Promise<{
+  detectedFormat: string;
+  facilities: { name: string; employeeCount: number; existingId: string | null }[];
+}> {
+  const file = formData.get("file") as File;
+  if (!file || file.size === 0) throw new Error("File is required");
+  if (file.size > MAX_FILE_SIZE) throw new Error("File exceeds 10 MB limit");
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { detectedFormat, facilities: parsed } = autoDetectAndPreview(buffer, file.name);
+
+  // Look up existing facilities for auto-matching
+  const existingFacilities = await db.select().from(facilities);
+  const existingMap = new Map<string, string>();
+  for (const f of existingFacilities) {
+    existingMap.set(f.name.toLowerCase(), f.id);
+  }
+
+  const result = parsed.map((f) => ({
+    name: f.name,
+    employeeCount: f.employeeCount,
+    existingId: existingMap.get(f.name.toLowerCase()) ?? null,
+  }));
+
+  return { detectedFormat, facilities: result };
+}
 
 export async function ingestBatch(formData: FormData) {
   const carrierId = formData.get("carrierId") as string;
@@ -20,10 +54,26 @@ export async function ingestBatch(formData: FormData) {
 
   if (employees.length === 0) throw new Error("No employee records found in file");
 
+  // Parse facility mappings if provided (from review step)
+  const facilityMappingsRaw = formData.get("facilityMappings") as string | null;
+  let facilityMappings: FacilityMapping[] | null = null;
+  if (facilityMappingsRaw) {
+    facilityMappings = JSON.parse(facilityMappingsRaw) as FacilityMapping[];
+  }
+
   const facilityCache = new Map<string, string>();
   const existingFacilities = await db.select().from(facilities);
   for (const f of existingFacilities) {
     facilityCache.set(f.name.toLowerCase(), f.id);
+  }
+
+  // Build mapping from detected facility name → resolved facility ID (using user-provided mappings)
+  if (facilityMappings) {
+    for (const mapping of facilityMappings) {
+      if (mapping.action === "match" && mapping.existingId) {
+        facilityCache.set(mapping.detectedName.toLowerCase(), mapping.existingId);
+      }
+    }
   }
 
   const result = await db.transaction(async (tx) => {
@@ -38,8 +88,19 @@ export async function ingestBatch(formData: FormData) {
     for (const emp of employees) {
       let facilityId = facilityCache.get(emp.facilityName.toLowerCase());
       if (!facilityId) {
+        // Determine facility name: use mapping's newName if available, otherwise detected name
+        let createName = emp.facilityName;
+        if (facilityMappings) {
+          const mapping = facilityMappings.find(
+            (m) => m.detectedName.toLowerCase() === emp.facilityName.toLowerCase()
+          );
+          if (mapping?.action === "create" && mapping.newName) {
+            createName = mapping.newName;
+          }
+        }
+
         const [newFacility] = await tx.insert(facilities).values({
-          name: emp.facilityName,
+          name: createName,
           contactEmail: null,
           contactName: null,
           notes: "Auto-created during batch ingestion — needs contact info",
