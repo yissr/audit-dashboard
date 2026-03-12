@@ -5,7 +5,6 @@ import { ingestBatch } from "../actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { redirect } from "next/navigation";
 
 export default async function NewBatchPage() {
@@ -45,16 +44,7 @@ export default async function NewBatchPage() {
                 required
                 className="w-full border rounded-md px-3 py-2 text-sm"
               />
-            </div>
-            <div>
-              <Label htmlFor="columnMapping">Column Mapping (JSON, optional)</Label>
-              <Textarea
-                id="columnMapping"
-                name="columnMapping"
-                placeholder='{"Employee Name": "employeeName", "SSN Last 4": "ssnLast4", "Facility": "facilityName", "Policy Number": "policyNumber"}'
-                rows={4}
-              />
-              <p className="text-xs text-gray-400 mt-1">Leave blank if CSV headers already match internal field names.</p>
+              <p className="text-xs text-gray-400 mt-1">Format is auto-detected (Mo Census, Avid, Momentous, and standard CSV/XLSX supported).</p>
             </div>
             <Button type="submit" className="w-full">Upload & Ingest</Button>
           </form>
