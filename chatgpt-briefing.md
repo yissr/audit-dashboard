@@ -60,3 +60,19 @@ Workers' Compensation Audit Dashboard built with Next.js 16, Drizzle ORM, Neon P
 **Key decisions:** Inline snooze duration picker (button list) instead of dialog+form for simplicity. Expired snoozes auto-wake on page load via server-side check. Reminder button just increments count (actual email sending deferred to Phase 2).
 **Issues encountered:** None.
 **Open items:** Send Reminder is UI-only (no email). Phase 2 email pipeline still skipped.
+
+### Run: /build — 2026-03-12 (3)
+**Task:** Filter dependents from parsers + add facility review step on upload
+**Outcome:** APPROVED
+**Iterations:** 1
+**Files created/modified:**
+- `src/lib/parsers/mo-census.ts` (modified — filter Type!="01" rows)
+- `src/lib/parsers/group-by-field.ts` (modified — added memberFilterField/memberFilterValue config)
+- `src/lib/parsers/auto-detect.ts` (modified — pass filter config for Avid/Momentous, added autoDetectAndPreview)
+- `src/app/batches/actions.ts` (modified — added previewFile action, ingestBatch accepts facilityMappings)
+- `src/app/batches/new/page.tsx` (rewritten — server component wrapper)
+- `src/app/batches/new/new-batch-form.tsx` (new — client component with two-step upload flow)
+- `test-data/test-parsers.mjs` (new — parser test script)
+**Key decisions:** Generic memberFilterField/memberFilterValue in GroupByFieldConfig avoids per-carrier filter logic. File parsed twice (preview + ingest) to keep architecture simple. Server/client split for upload page.
+**Issues encountered:** Mo Census sample file had all Type="01" (no dependents to filter). Test adjusted to accept this as valid.
+**Open items:** No end-to-end UI test for the facility review flow. File parsed twice per upload (acceptable for <10MB files).
