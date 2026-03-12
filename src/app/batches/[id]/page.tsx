@@ -6,6 +6,7 @@ import { eq, count, and } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import OutreachStatusSelect from "./OutreachStatusSelect";
+import Link from "next/link";
 
 const statusColors: Record<string, string> = {
   PENDING_OUTREACH: "bg-gray-100 text-gray-700",
@@ -96,6 +97,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                   <th className="text-left py-3 px-4 font-medium">Facility</th>
                   <th className="text-left py-3 px-4 font-medium">Employees</th>
                   <th className="text-left py-3 px-4 font-medium">Status</th>
+                  <th className="text-left py-3 px-4 font-medium">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -103,7 +105,11 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                   const displayStatus = fg.outreachStatus ?? "PENDING_OUTREACH";
                   return (
                     <tr key={fg.facilityId} className="border-b hover:bg-gray-50">
-                      <td className="py-3 px-4 font-medium">{fg.facilityName ?? "Unknown"}</td>
+                      <td className="py-3 px-4 font-medium">
+                        <Link href={`/batches/${id}/facilities/${fg.facilityId}`} className="text-blue-600 hover:underline">
+                          {fg.facilityName ?? "Unknown"}
+                        </Link>
+                      </td>
                       <td className="py-3 px-4 text-gray-500">{fg.recordCount}</td>
                       <td className="py-3 px-4">
                         {fg.outreachId ? (
@@ -116,6 +122,9 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                             {displayStatus}
                           </span>
                         )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <Link href={`/batches/${id}/classify/${fg.facilityId}`} className="text-sm text-blue-600 hover:text-blue-800 hover:underline">Classify</Link>
                       </td>
                     </tr>
                   );
