@@ -56,6 +56,21 @@ export async function classifyIdentity(
   revalidatePath("/batches", "layout");
 }
 
+export async function updateIdentityName(
+  identityId: string,
+  newName: string
+): Promise<void> {
+  const trimmed = newName.trim();
+  if (!trimmed) throw new Error("Name cannot be empty");
+
+  await db
+    .update(employeeIdentities)
+    .set({ canonicalName: trimmed })
+    .where(eq(employeeIdentities.id, identityId));
+
+  revalidatePath("/batches", "layout");
+}
+
 export async function markFacilityDone(
   outreachId: string,
   batchId: string

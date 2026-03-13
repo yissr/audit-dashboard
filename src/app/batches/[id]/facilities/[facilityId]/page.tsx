@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import ClassifyRow from "./ClassifyRow";
 import FacilityActions from "./FacilityActions";
+import EditIdentityName from "./EditIdentityName";
 
 const classificationColors: Record<string, string> = {
   STILL_EMPLOYED: "bg-green-100 text-green-700",
@@ -135,7 +136,9 @@ export default async function ClassificationPage({
                   <CardContent className="pt-4 pb-4">
                     <div className="flex items-start justify-between gap-4 flex-wrap">
                       <div className="min-w-0">
-                        <div className="font-medium text-sm">{identity.canonicalName}</div>
+                        <div className="font-medium text-sm">
+                          <EditIdentityName identityId={identity.id} currentName={identity.canonicalName} />
+                        </div>
                         {identity.policyNumber && (
                           <div className="text-xs text-gray-400 mt-0.5">ID: {identity.policyNumber}</div>
                         )}
