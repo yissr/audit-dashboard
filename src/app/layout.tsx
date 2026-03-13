@@ -7,7 +7,7 @@ import Image from "next/image";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Empire Benefit Solutions",
+  title: "Empire Benefit Solutions — Audit Dashboard",
   description: "Workers' Compensation Audit Dashboard",
 };
 
