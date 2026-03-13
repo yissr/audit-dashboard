@@ -317,8 +317,13 @@ export async function updateOutreachStatus(
   revalidatePath("/");
 }
 
-export async function snoozeFacility(outreachId: string, durationDays: number): Promise<void> {
-  if (durationDays <= 0) throw new Error("Snooze duration must be positive");
+export async function snoozeFacility(outreachId: string, until: string): Promise<void> {
+  const snoozeUntil = new Date(until);
+  if (isNaN(snoozeUntil.getTime())) throw new Error("Invalid snooze date");
+  const maxDate = new Date();
+  maxDate.setMonth(maxDate.getMonth() + 1);
+  if (snoozeUntil > maxDate) throw new Error("Snooze date cannot be more than 1 month out");
+  if (snoozeUntil <= new Date()) throw new Error("Snooze date must be in the future");
 
   const existing = await db
     .select({ id: facilityOutreaches.id, batchId: facilityOutreaches.batchId })
@@ -326,8 +331,6 @@ export async function snoozeFacility(outreachId: string, durationDays: number): 
     .where(eq(facilityOutreaches.id, outreachId));
 
   if (existing.length === 0) throw new Error(`Outreach record not found: ${outreachId}`);
-
-  const snoozeUntil = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
 
   // Snooze sets snoozeUntil only — does NOT change status
   await db

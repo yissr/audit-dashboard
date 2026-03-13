@@ -103,3 +103,12 @@ Workers' Compensation Audit Dashboard built with Next.js 16, Drizzle ORM, Neon P
 **Key decisions:** Employee identity deduplication uses SSN > policyNumber > normalized name matching priority. Classification lives on employee_identities (not audit_records) when a period is set. Facility view and markFacilityDone are bifurcated: period-aware path uses employee_identities, legacy path uses audit_records. Outreach creation deduped per (periodId, facilityId) — second batch in same period does not create duplicate outreach.
 **Issues encountered:** markFacilityDone always blocked completion in period-aware mode — it was checking auditRecords.classification (always null in period mode) instead of employeeIdentities.classification. Fixed by branching on outreach.periodId.
 **Open items:** No unique constraint on employee_identities (periodId, facilityId, canonicalName) — concurrent ingests could create duplicates (low probability for single-user app). deleteRep has no FK guard against batches referencing the rep.
+
+### Run: /build — 2026-03-13 (2)
+**Task:** Cross-period deduplication — monthly medical + quarterly Guardian auto-link for months 3/6/9/12
+**Outcome:** APPROVED WITH RECOMMENDATIONS
+**Iterations:** 1
+**Files created/modified:** src/lib/period-utils.ts (new), src/db/schema.ts, src/app/periods/actions.ts, src/app/batches/actions.ts, src/app/batches/[id]/facilities/actions.ts, src/app/batches/[id]/facilities/[facilityId]/page.tsx, src/app/periods/new/NewPeriodForm.tsx, test-data/test-period-linking.mjs (new)
+**Key decisions:** Self-referential linkedPeriodId FK on audit_periods. createPeriod auto-creates counterpart period and links bidirectionally. findOrCreateIdentity merges both period caches before matching. New identities always created under current batch's periodId.
+**Issues encountered:** None — single iteration, all 11 tests passed, tsc clean.
+**Open items:** Reviewer recommendations (non-blocking): wrap bidirectional link updates in transaction; unique constraint on period name; onDelete("set null") on linkedPeriodId FK; trim-normalize SSN/policyNumber before matching.

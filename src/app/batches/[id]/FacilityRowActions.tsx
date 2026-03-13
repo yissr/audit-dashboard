@@ -3,14 +3,6 @@
 import { useTransition, useState } from "react";
 import { snoozeFacility, wakeFacility, logReminder } from "../actions";
 
-const SNOOZE_OPTIONS = [
-  { label: "1 day", days: 1 },
-  { label: "3 days", days: 3 },
-  { label: "1 week", days: 7 },
-  { label: "2 weeks", days: 14 },
-  { label: "1 month", days: 30 },
-];
-
 interface FacilityRowActionsProps {
   outreachId: string;
   status: string;
@@ -28,30 +20,40 @@ export default function FacilityRowActions({
 }: FacilityRowActionsProps) {
   const [isPending, startTransition] = useTransition();
   const [showSnooze, setShowSnooze] = useState(false);
+  const [snoozeDate, setSnoozeDate] = useState("");
+  const [snoozeError, setSnoozeError] = useState("");
 
-  // Snoozed is now a column modifier: snoozeUntil != null and in the future
   const now = new Date();
   const isSnoozed = snoozeUntil != null && new Date(snoozeUntil) > now;
   const isDone = status === "DONE";
   const canRemind = !isSnoozed && !isDone;
 
-  function handleSnooze(days: number) {
+  // Max snooze date = 1 month from today
+  const maxDate = new Date();
+  maxDate.setMonth(maxDate.getMonth() + 1);
+  const maxDateStr = maxDate.toISOString().split("T")[0];
+
+  // Min date = tomorrow
+  const minDate = new Date();
+  minDate.setDate(minDate.getDate() + 1);
+  const minDateStr = minDate.toISOString().split("T")[0];
+
+  function handleSnooze() {
+    if (!snoozeDate) { setSnoozeError("Pick a date"); return; }
+    setSnoozeError("");
     startTransition(async () => {
-      await snoozeFacility(outreachId, days);
+      await snoozeFacility(outreachId, snoozeDate);
       setShowSnooze(false);
+      setSnoozeDate("");
     });
   }
 
   function handleWake() {
-    startTransition(async () => {
-      await wakeFacility(outreachId);
-    });
+    startTransition(async () => { await wakeFacility(outreachId); });
   }
 
   function handleReminder() {
-    startTransition(async () => {
-      await logReminder(outreachId);
-    });
+    startTransition(async () => { await logReminder(outreachId); });
   }
 
   return (
@@ -73,23 +75,29 @@ export default function FacilityRowActions({
         ) : !isDone ? (
           <>
             {showSnooze ? (
-              <div className="flex items-center gap-1">
-                {SNOOZE_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.days}
-                    onClick={() => handleSnooze(opt.days)}
-                    disabled={isPending}
-                    className="text-xs px-2 py-1 rounded bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-50"
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+              <div className="flex items-center gap-1 flex-wrap">
+                <input
+                  type="date"
+                  value={snoozeDate}
+                  min={minDateStr}
+                  max={maxDateStr}
+                  onChange={(e) => { setSnoozeDate(e.target.value); setSnoozeError(""); }}
+                  className="border rounded px-2 py-0.5 text-xs"
+                />
                 <button
-                  onClick={() => setShowSnooze(false)}
+                  onClick={handleSnooze}
+                  disabled={isPending || !snoozeDate}
+                  className="text-xs px-2 py-1 rounded bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-50"
+                >
+                  Set
+                </button>
+                <button
+                  onClick={() => { setShowSnooze(false); setSnoozeError(""); }}
                   className="text-xs px-1 text-gray-400 hover:text-gray-600"
                 >
                   ✕
                 </button>
+                {snoozeError && <span className="text-xs text-red-500">{snoozeError}</span>}
               </div>
             ) : (
               <button
