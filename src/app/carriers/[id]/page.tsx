@@ -2,9 +2,11 @@ export const dynamic = "force-dynamic";
 import { db } from "@/db";
 import { carriers } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { listReps, addRep, deleteRep } from "./reps/actions";
+import { deleteCarrier } from "../actions";
 import Link from "next/link";
+import CarrierLogoUpload from "./CarrierLogoUpload";
 
 export default async function CarrierDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,11 +15,29 @@ export default async function CarrierDetailPage({ params }: { params: Promise<{ 
 
   const reps = await listReps(id);
 
+  async function handleDelete() {
+    "use server";
+    await deleteCarrier(id);
+    redirect("/carriers");
+  }
+
   return (
     <div className="max-w-2xl space-y-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <Link href="/carriers" className="text-sm text-blue-600 hover:underline">← Carriers</Link>
+          <h1 className="text-2xl font-bold text-[#1B2A4A] mt-1">{carrier.name}</h1>
+        </div>
+        <form action={handleDelete}>
+          <button type="submit" className="text-sm text-red-500 hover:underline mt-1" onClick={(e) => { if (!confirm(`Delete ${carrier.name}? This cannot be undone.`)) e.preventDefault(); }}>
+            Delete Carrier
+          </button>
+        </form>
+      </div>
+
       <div>
-        <Link href="/carriers" className="text-sm text-blue-600 hover:underline">← Carriers</Link>
-        <h1 className="text-2xl font-bold text-[#1B2A4A] mt-1">{carrier.name}</h1>
+        <h2 className="text-lg font-semibold mb-3">Logo</h2>
+        <CarrierLogoUpload carrierId={id} currentLogoUrl={carrier.logoUrl} />
       </div>
 
       <div>

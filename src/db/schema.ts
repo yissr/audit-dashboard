@@ -20,6 +20,7 @@ export const carriers = pgTable("carriers", {
   emailPattern: text("email_pattern"),
   columnMapping: json("column_mapping").$type<Record<string, string>>(),
   fileType: fileTypeEnum("file_type").default("CSV"),
+  logoUrl: text("logo_url"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
