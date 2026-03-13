@@ -19,10 +19,17 @@ export interface GroupByFieldConfig {
   /** Value that identifies a primary member (e.g. "Member", "1") */
   memberFilterValue?: string;
   /**
-   * If set, skip rows where ALL of these columns have values matching skipIfAllMatch.
-   * Used for Avid: skip rows where both "Dental Elected" and "Vision Elected" are "No".
+   * If set, skip rows where ALL of these columns have values matching the given value.
+   * Example: skip rows where both "Dental Elected" and "Vision Elected" are "No".
+   * Applied only when these columns exist in the file.
    */
   skipIfAllColumnsMatch?: { fields: string[]; value: string };
+  /**
+   * If set, skip rows where this column has any non-empty value.
+   * Example: skip rows where "MedicalTerminationDate" is populated.
+   * Applied only when this column exists in the file.
+   */
+  skipIfColumnNotEmpty?: string;
 }
 
 export function parseGroupByFieldBuffer(
@@ -54,10 +61,19 @@ export function parseGroupByFieldBuffer(
     // Skip rows where all specified columns match a given value (e.g. both vision & dental = "No")
     if (config.skipIfAllColumnsMatch) {
       const { fields, value } = config.skipIfAllColumnsMatch;
-      const allMatch = fields.every(
-        (f) => (row[f] ?? "").toString().trim().toLowerCase() === value.toLowerCase()
-      );
-      if (allMatch) continue;
+      const presentFields = fields.filter((f) => f in row);
+      if (presentFields.length > 0) {
+        const allMatch = presentFields.every(
+          (f) => (row[f] ?? "").toString().trim().toLowerCase() === value.toLowerCase()
+        );
+        if (allMatch) continue;
+      }
+    }
+
+    // Skip rows where a termination-date column is non-empty
+    if (config.skipIfColumnNotEmpty && config.skipIfColumnNotEmpty in row) {
+      const val = (row[config.skipIfColumnNotEmpty] ?? "").toString().trim();
+      if (val) continue;
     }
 
     const facilityName = `${config.facilityPrefix ?? ""}${facilityCode}`;

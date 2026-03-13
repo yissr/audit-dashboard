@@ -41,6 +41,10 @@ export function parseMoCensusBuffer(buffer: Buffer): ParsedEmployee[] {
     const type = (row[1] ?? "").toString().trim();
     if (type !== "01") continue;
 
+    // Skip terminated employees (Term Date at col index 8 is non-empty)
+    const termDate = (row[8] ?? "").toString().trim();
+    if (termDate) continue;
+
     const name = (row[3] as string).trim();
     if (!name) continue;
 

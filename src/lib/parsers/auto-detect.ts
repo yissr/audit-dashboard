@@ -43,6 +43,16 @@ export function autoDetectAndParse(
   // Get headers from first row
   const headers = (rawRows[0] as string[]).map((h) => (h ?? "").toString().trim());
 
+  // Detect generic termination date column (any header containing "termination" or "term date")
+  const termDateCol = headers.find((h) => /termination.?date|term.?date/i.test(h));
+
+  // Detect generic vision/dental columns
+  const visionCol = headers.find((h) => /vision/i.test(h));
+  const dentalCol = headers.find((h) => /dental/i.test(h));
+  const visionDentalFilter = visionCol && dentalCol
+    ? { fields: [dentalCol, visionCol], value: "No" }
+    : undefined;
+
   // --- Momentous detection ---
   if (headers.includes("GroupLocationNumber")) {
     return {
@@ -56,6 +66,8 @@ export function autoDetectAndParse(
         ssnField: "SocialSecurityNumber",
         memberFilterField: "RelationshipCode",
         memberFilterValue: "1",
+        skipIfColumnNotEmpty: termDateCol,
+        skipIfAllColumnsMatch: visionDentalFilter,
       }),
     };
   }
@@ -73,7 +85,8 @@ export function autoDetectAndParse(
         ssnField: "",
         memberFilterField: "Relationship",
         memberFilterValue: "Member",
-        skipIfAllColumnsMatch: { fields: ["Dental Elected", "Vision Elected"], value: "No" },
+        skipIfAllColumnsMatch: visionDentalFilter,
+        skipIfColumnNotEmpty: termDateCol,
       }),
     };
   }
