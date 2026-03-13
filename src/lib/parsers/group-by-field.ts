@@ -18,6 +18,11 @@ export interface GroupByFieldConfig {
   memberFilterField?: string;
   /** Value that identifies a primary member (e.g. "Member", "1") */
   memberFilterValue?: string;
+  /**
+   * If set, skip rows where ALL of these columns have values matching skipIfAllMatch.
+   * Used for Avid: skip rows where both "Dental Elected" and "Vision Elected" are "No".
+   */
+  skipIfAllColumnsMatch?: { fields: string[]; value: string };
 }
 
 export function parseGroupByFieldBuffer(
@@ -44,6 +49,15 @@ export function parseGroupByFieldBuffer(
     if (config.memberFilterField) {
       const filterVal = (row[config.memberFilterField] ?? "").toString().trim();
       if (filterVal !== config.memberFilterValue) continue;
+    }
+
+    // Skip rows where all specified columns match a given value (e.g. both vision & dental = "No")
+    if (config.skipIfAllColumnsMatch) {
+      const { fields, value } = config.skipIfAllColumnsMatch;
+      const allMatch = fields.every(
+        (f) => (row[f] ?? "").toString().trim().toLowerCase() === value.toLowerCase()
+      );
+      if (allMatch) continue;
     }
 
     const facilityName = `${config.facilityPrefix ?? ""}${facilityCode}`;

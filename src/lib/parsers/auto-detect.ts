@@ -73,6 +73,7 @@ export function autoDetectAndParse(
         ssnField: "",
         memberFilterField: "Relationship",
         memberFilterValue: "Member",
+        skipIfAllColumnsMatch: { fields: ["Dental Elected", "Vision Elected"], value: "No" },
       }),
     };
   }

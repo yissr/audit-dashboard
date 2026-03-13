@@ -77,60 +77,57 @@ export async function ingestBatch(formData: FormData) {
     }
   }
 
-  const result = await db.transaction(async (tx) => {
-    const [batch] = await tx.insert(auditBatches).values({
-      carrierId,
-      sourceFile: file.name,
-      status: "DRAFT",
-    }).returning();
+  const [batch] = await db.insert(auditBatches).values({
+    carrierId,
+    sourceFile: file.name,
+    status: "DRAFT",
+  }).returning();
 
-    const batchFacilityIds = new Set<string>();
+  const batchFacilityIds = new Set<string>();
 
-    for (const emp of employees) {
-      let facilityId = facilityCache.get(emp.facilityName.toLowerCase());
-      if (!facilityId) {
-        // Determine facility name: use mapping's newName if available, otherwise detected name
-        let createName = emp.facilityName;
-        if (facilityMappings) {
-          const mapping = facilityMappings.find(
-            (m) => m.detectedName.toLowerCase() === emp.facilityName.toLowerCase()
-          );
-          if (mapping?.action === "create" && mapping.newName) {
-            createName = mapping.newName;
-          }
+  for (const emp of employees) {
+    let facilityId = facilityCache.get(emp.facilityName.toLowerCase());
+    if (!facilityId) {
+      let createName = emp.facilityName;
+      if (facilityMappings) {
+        const mapping = facilityMappings.find(
+          (m) => m.detectedName.toLowerCase() === emp.facilityName.toLowerCase()
+        );
+        if (mapping?.action === "create" && mapping.newName) {
+          createName = mapping.newName;
         }
-
-        const [newFacility] = await tx.insert(facilities).values({
-          name: createName,
-          contactEmail: null,
-          contactName: null,
-          notes: "Auto-created during batch ingestion — needs contact info",
-        }).returning();
-        facilityId = newFacility.id;
-        facilityCache.set(emp.facilityName.toLowerCase(), facilityId);
       }
 
-      batchFacilityIds.add(facilityId);
-
-      await tx.insert(auditRecords).values({
-        batchId: batch.id,
-        facilityId,
-        employeeName: emp.employeeName,
-        ssnLast4: emp.ssnLast4,
-        policyNumber: emp.policyNumber,
-      });
+      const [newFacility] = await db.insert(facilities).values({
+        name: createName,
+        contactEmail: null,
+        contactName: null,
+        notes: "Auto-created during batch ingestion — needs contact info",
+      }).returning();
+      facilityId = newFacility.id;
+      facilityCache.set(emp.facilityName.toLowerCase(), facilityId);
     }
 
-    for (const facilityId of batchFacilityIds) {
-      await tx.insert(facilityOutreaches).values({
-        batchId: batch.id,
-        facilityId,
-        status: "DRAFT",
-      });
-    }
+    batchFacilityIds.add(facilityId);
 
-    return { batchId: batch.id, recordCount: employees.length };
-  });
+    await db.insert(auditRecords).values({
+      batchId: batch.id,
+      facilityId,
+      employeeName: emp.employeeName,
+      ssnLast4: emp.ssnLast4,
+      policyNumber: emp.policyNumber,
+    });
+  }
+
+  for (const facilityId of batchFacilityIds) {
+    await db.insert(facilityOutreaches).values({
+      batchId: batch.id,
+      facilityId,
+      status: "DRAFT",
+    });
+  }
+
+  const result = { batchId: batch.id, recordCount: employees.length };
 
   revalidatePath("/batches");
   return result;
