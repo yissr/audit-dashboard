@@ -1,13 +1,14 @@
 export const dynamic = "force-dynamic";
 
 import { db } from "@/db";
-import { auditBatches, auditRecords, carriers, facilities, facilityOutreaches } from "@/db/schema";
+import { auditBatches, auditPeriods, auditRecords, carriers, facilities, facilityOutreaches } from "@/db/schema";
 import { eq, count, and } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import OutreachStatusSelect from "./OutreachStatusSelect";
 import FacilityRowActions from "./FacilityRowActions";
 import OutreachEmailThread from "./OutreachEmailThread";
+import SendOutreachButton from "./SendOutreachButton";
 import { checkAndWakeExpiredSnoozes } from "../actions";
 import Link from "next/link";
 
@@ -29,9 +30,11 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
       sourceFile: auditBatches.sourceFile,
       receivedAt: auditBatches.receivedAt,
       carrierName: carriers.name,
+      periodName: auditPeriods.name,
     })
     .from(auditBatches)
     .leftJoin(carriers, eq(auditBatches.carrierId, carriers.id))
+    .leftJoin(auditPeriods, eq(auditBatches.periodId, auditPeriods.id))
     .where(eq(auditBatches.id, id));
 
   if (!batch) notFound();
@@ -43,6 +46,8 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
     .select({
       facilityId: auditRecords.facilityId,
       facilityName: facilities.name,
+      contactEmail: facilities.contactEmail,
+      ccEmails: facilities.ccEmails,
       recordCount: count(auditRecords.id),
       outreachId: facilityOutreaches.id,
       outreachStatus: facilityOutreaches.status,
@@ -67,6 +72,8 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
     .groupBy(
       auditRecords.facilityId,
       facilities.name,
+      facilities.contactEmail,
+      facilities.ccEmails,
       facilityOutreaches.id,
       facilityOutreaches.status,
       facilityOutreaches.snoozeUntil,
@@ -78,6 +85,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
       facilityOutreaches.repliedAt
     );
 
+  const periodName = batch.periodName ?? "";
   const totalFacilities = facilityGroups.length;
   const doneCount = facilityGroups.filter((fg) => fg.outreachStatus === "DONE").length;
   const donePercent = totalFacilities > 0 ? Math.round((doneCount / totalFacilities) * 100) : 0;
@@ -166,6 +174,15 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                       <td className="py-3 px-4">
                         <div className="flex flex-col gap-1">
                           <Link href={`/batches/${id}/facilities/${fg.facilityId}`} className="text-sm text-blue-600 hover:text-blue-800 hover:underline">Classify</Link>
+                          {fg.outreachId && fg.outreachStatus !== "DONE" && (
+                            <SendOutreachButton
+                              outreachId={fg.outreachId}
+                              facilityName={fg.facilityName ?? ""}
+                              facilityEmail={fg.contactEmail ?? null}
+                              savedCcEmails={(fg.ccEmails as string[]) ?? []}
+                              periodName={periodName}
+                            />
+                          )}
                           {fg.outreachId && (
                             <FacilityRowActions
                               outreachId={fg.outreachId}

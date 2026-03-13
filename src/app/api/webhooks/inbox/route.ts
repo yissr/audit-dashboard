@@ -112,6 +112,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .set({
         status: "REPLIED",
         repliedAt: new Date(),
+        replyRaw: bodyText ?? bodyHtml ?? null,
       })
       .where(eq(facilityOutreaches.id, matchedOutreach.id));
 

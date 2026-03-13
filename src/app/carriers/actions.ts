@@ -25,3 +25,9 @@ export async function updateCarrierLogo(carrierId: string, logoUrl: string | nul
   revalidatePath(`/carriers/${carrierId}`);
   revalidatePath("/carriers");
 }
+
+export async function updateCarrierCcEmails(carrierId: string, ccEmails: string[]): Promise<void> {
+  await db.update(carriers).set({ ccEmails }).where(eq(carriers.id, carrierId));
+  revalidatePath(`/carriers/${carrierId}`);
+  revalidatePath("/carriers");
+}

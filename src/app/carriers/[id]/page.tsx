@@ -7,6 +7,7 @@ import { listReps, addRep, deleteRep } from "./reps/actions";
 import Link from "next/link";
 import CarrierLogoUpload from "./CarrierLogoUpload";
 import DeleteCarrierButton from "./DeleteCarrierButton";
+import CcEmailsEditor from "./CcEmailsEditor";
 
 export default async function CarrierDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,6 +29,15 @@ export default async function CarrierDetailPage({ params }: { params: Promise<{ 
       <div>
         <h2 className="text-lg font-semibold mb-3">Logo</h2>
         <CarrierLogoUpload carrierId={id} currentLogoUrl={carrier.logoUrl} />
+      </div>
+
+      <div>
+        <h2 className="text-lg font-semibold mb-3">CC Recipients</h2>
+        <p className="text-sm text-gray-500 mb-2">These addresses will be CC'd on submission emails sent to this carrier.</p>
+        <CcEmailsEditor
+          carrierId={id}
+          initialCcEmails={(carrier.ccEmails as string[]) ?? []}
+        />
       </div>
 
       <div>

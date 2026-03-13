@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import CcEmailsEditor from "./CcEmailsEditor";
 
 export default async function EditFacilityPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -46,6 +47,19 @@ export default async function EditFacilityPage({ params }: { params: Promise<{ i
             </div>
             <Button type="submit" className="w-full">Save Changes</Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6 space-y-3">
+          <div>
+            <Label>CC Recipients</Label>
+            <p className="text-xs text-gray-500 mb-2">These addresses will be CC'd on all outreach emails sent to this facility.</p>
+            <CcEmailsEditor
+              facilityId={id}
+              initialCcEmails={(facility.ccEmails as string[]) ?? []}
+            />
+          </div>
         </CardContent>
       </Card>
     </div>

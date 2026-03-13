@@ -1,9 +1,64 @@
 "use server";
 
 import { db } from "@/db";
-import { auditRecords, auditPeriods, facilityOutreaches, employeeIdentities } from "@/db/schema";
+import { auditRecords, auditPeriods, auditBatches, facilityOutreaches, employeeIdentities, facilities } from "@/db/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { sendGraphEmail } from "@/lib/graph-client";
+
+export async function sendOutreachEmail(
+  outreachId: string,
+  cc: string[],
+  subject: string,
+  bodyText: string,
+): Promise<void> {
+  if (!outreachId) throw new Error("Outreach ID is required");
+
+  // Fetch outreach + facility + batch + period
+  const [row] = await db
+    .select({
+      outreachId: facilityOutreaches.id,
+      batchId: facilityOutreaches.batchId,
+      facilityId: facilityOutreaches.facilityId,
+      contactEmail: facilities.contactEmail,
+      periodName: auditPeriods.name,
+    })
+    .from(facilityOutreaches)
+    .leftJoin(facilities, eq(facilityOutreaches.facilityId, facilities.id))
+    .leftJoin(auditBatches, eq(facilityOutreaches.batchId, auditBatches.id))
+    .leftJoin(auditPeriods, eq(auditBatches.periodId, auditPeriods.id))
+    .where(eq(facilityOutreaches.id, outreachId));
+
+  if (!row) throw new Error("Outreach not found");
+  if (!row.contactEmail) throw new Error("Facility has no contact email");
+
+  const escaped = bodyText
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  const htmlBody = `<html><body><pre style="font-family:Arial,sans-serif;white-space:pre-wrap">${escaped}</pre></body></html>`;
+
+  const result = await sendGraphEmail({
+    to: row.contactEmail,
+    cc,
+    subject,
+    htmlBody,
+  });
+
+  await db
+    .update(facilityOutreaches)
+    .set({
+      status: "SENT",
+      sentAt: new Date(),
+      graphMessageId: result.messageId,
+      graphConversationId: result.conversationId,
+      emailBodyHtml: htmlBody,
+    })
+    .where(eq(facilityOutreaches.id, outreachId));
+
+  revalidatePath(`/batches/${row.batchId}`);
+  revalidatePath("/");
+}
 
 export async function classifyEmployee(
   recordId: string,

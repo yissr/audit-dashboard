@@ -21,6 +21,7 @@ export const carriers = pgTable("carriers", {
   columnMapping: json("column_mapping").$type<Record<string, string>>(),
   fileType: fileTypeEnum("file_type").default("CSV"),
   logoUrl: text("logo_url"),
+  ccEmails: json("cc_emails").$type<string[]>().default([]),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -39,6 +40,7 @@ export const facilities = pgTable("facilities", {
   contactEmail: text("contact_email"),
   contactName: text("contact_name"),
   notes: text("notes"),
+  ccEmails: json("cc_emails").$type<string[]>().default([]),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => [
   uniqueIndex("facilities_name_unique").on(t.name),

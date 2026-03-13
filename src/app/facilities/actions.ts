@@ -39,3 +39,9 @@ export async function deleteFacility(id: string) {
   await db.delete(facilities).where(eq(facilities.id, id));
   revalidatePath("/facilities");
 }
+
+export async function updateFacilityCcEmails(facilityId: string, ccEmails: string[]): Promise<void> {
+  await db.update(facilities).set({ ccEmails }).where(eq(facilities.id, facilityId));
+  revalidatePath(`/facilities/${facilityId}/edit`);
+  revalidatePath("/facilities");
+}
