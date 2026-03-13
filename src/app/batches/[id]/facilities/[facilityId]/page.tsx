@@ -1,8 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { db } from "@/db";
-import { auditBatches, auditRecords, carriers, facilities, facilityOutreaches, employeeIdentities } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { auditBatches, auditRecords, auditPeriods, carriers, facilities, facilityOutreaches, employeeIdentities } from "@/db/schema";
+import { eq, and, inArray } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
@@ -63,18 +63,28 @@ export default async function ClassificationPage({
     .where(and(eq(auditRecords.batchId, batchId), eq(auditRecords.facilityId, facilityId)))
     .orderBy(auditRecords.employeeName);
 
-  // If batch has a period, load identities for this (period, facility)
+  // If batch has a period, load identities for this (period, facility) — including linked period
   let identityMap = new Map<string, typeof employeeIdentities.$inferSelect>();
   if (batch.periodId) {
+    let linkedPeriodId: string | null = null;
+    const [periodRow] = await db
+      .select({ linkedPeriodId: auditPeriods.linkedPeriodId })
+      .from(auditPeriods)
+      .where(eq(auditPeriods.id, batch.periodId));
+    linkedPeriodId = periodRow?.linkedPeriodId ?? null;
+
+    const periodIds = [batch.periodId!, linkedPeriodId].filter((x): x is string => x !== null);
     const identitiesForFacility = await db
       .select()
       .from(employeeIdentities)
       .where(
         and(
-          eq(employeeIdentities.periodId, batch.periodId),
+          inArray(employeeIdentities.periodId, periodIds),
           eq(employeeIdentities.facilityId, facilityId)
         )
-      );
+      )
+      .orderBy(employeeIdentities.canonicalName);
+
     for (const identity of identitiesForFacility) {
       identityMap.set(identity.id, identity);
     }

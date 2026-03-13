@@ -1,5 +1,5 @@
 import {
-  pgTable, uuid, text, timestamp, integer, boolean, pgEnum, json, uniqueIndex, bigserial, jsonb
+  pgTable, uuid, text, timestamp, integer, boolean, pgEnum, json, uniqueIndex, bigserial, jsonb, type AnyPgColumn
 } from "drizzle-orm/pg-core";
 
 export const fileTypeEnum = pgEnum("file_type", ["CSV", "XLSX", "PDF"]);
@@ -49,6 +49,7 @@ export const auditPeriods = pgTable("audit_periods", {
   startDate: timestamp("start_date"),
   endDate: timestamp("end_date"),
   createdAt: timestamp("created_at").defaultNow(),
+  linkedPeriodId: uuid("linked_period_id").references((): AnyPgColumn => auditPeriods.id),
 });
 
 export const auditBatches = pgTable("audit_batches", {

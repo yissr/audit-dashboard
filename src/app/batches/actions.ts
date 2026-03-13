@@ -1,9 +1,9 @@
 "use server";
 import { db } from "@/db";
-import { auditBatches, auditRecords, carriers, facilities, facilityOutreaches, employeeIdentities } from "@/db/schema";
+import { auditBatches, auditRecords, auditPeriods, carriers, facilities, facilityOutreaches, employeeIdentities } from "@/db/schema";
 import { autoDetectAndParse, autoDetectAndPreview } from "@/lib/parsers/auto-detect";
 import { revalidatePath } from "next/cache";
-import { eq, and, lte, isNotNull, sql } from "drizzle-orm";
+import { eq, and, lte, isNotNull, sql, inArray } from "drizzle-orm";
 import { type OutreachStatus, assertValidTransition } from "@/lib/outreach-transitions";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -23,6 +23,7 @@ function normalize(name: string): string {
 
 async function findOrCreateIdentity(
   periodId: string,
+  linkedPeriodId: string | null,
   facilityId: string,
   emp: { employeeName: string; ssnLast4?: string; policyNumber?: string },
   carrierName: string,
@@ -30,20 +31,28 @@ async function findOrCreateIdentity(
 ): Promise<string> {
   const cacheKey = `${periodId}:${facilityId}`;
 
+  // Load primary period identities
   if (!cache.has(cacheKey)) {
-    const existing = await db
-      .select()
-      .from(employeeIdentities)
-      .where(
-        and(
-          eq(employeeIdentities.periodId, periodId),
-          eq(employeeIdentities.facilityId, facilityId)
-        )
-      );
+    const existing = await db.select().from(employeeIdentities).where(
+      and(eq(employeeIdentities.periodId, periodId), eq(employeeIdentities.facilityId, facilityId))
+    );
     cache.set(cacheKey, existing);
   }
 
-  const identities = cache.get(cacheKey)!;
+  // Load linked period identities if applicable
+  const linkedKey = linkedPeriodId ? `${linkedPeriodId}:${facilityId}` : null;
+  if (linkedKey && !cache.has(linkedKey)) {
+    const linkedExisting = await db.select().from(employeeIdentities).where(
+      and(eq(employeeIdentities.periodId, linkedPeriodId!), eq(employeeIdentities.facilityId, facilityId))
+    );
+    cache.set(linkedKey, linkedExisting);
+  }
+
+  // Merge both lists for search
+  const primaryList = cache.get(cacheKey)!;
+  const linkedList = linkedKey ? (cache.get(linkedKey) ?? []) : [];
+  const identities = [...primaryList, ...linkedList];
+
   const normName = normalize(emp.employeeName);
 
   // Matching priority: ssn → policyNumber → name
@@ -76,17 +85,23 @@ async function findOrCreateIdentity(
 
       await db.update(employeeIdentities).set(updates).where(eq(employeeIdentities.id, match.id));
 
-      // Update cache entry
-      const idx = identities.findIndex((i) => i.id === match!.id);
-      if (idx !== -1) {
-        identities[idx] = { ...identities[idx], ...updates };
+      // Update the correct cache list (check which list contains the match by id)
+      const primaryIdx = primaryList.findIndex((i) => i.id === match!.id);
+      if (primaryIdx !== -1) {
+        primaryList[primaryIdx] = { ...primaryList[primaryIdx], ...updates };
+      } else if (linkedKey) {
+        const linkedListCache = cache.get(linkedKey)!;
+        const linkedIdx = linkedListCache.findIndex((i) => i.id === match!.id);
+        if (linkedIdx !== -1) {
+          linkedListCache[linkedIdx] = { ...linkedListCache[linkedIdx], ...updates };
+        }
       }
     }
 
     return match.id;
   }
 
-  // No match — create new identity
+  // No match — create new identity under periodId (not linkedPeriodId)
   const [newIdentity] = await db
     .insert(employeeIdentities)
     .values({
@@ -100,7 +115,7 @@ async function findOrCreateIdentity(
     })
     .returning();
 
-  identities.push(newIdentity);
+  primaryList.push(newIdentity);
   return newIdentity.id;
 }
 
@@ -183,6 +198,16 @@ export async function ingestBatch(formData: FormData) {
     periodId: periodId || undefined,
   }).returning();
 
+  // Fetch the period's linkedPeriodId for cross-period dedup
+  let linkedPeriodId: string | null = null;
+  if (periodId) {
+    const [periodRow] = await db
+      .select({ linkedPeriodId: auditPeriods.linkedPeriodId })
+      .from(auditPeriods)
+      .where(eq(auditPeriods.id, periodId));
+    linkedPeriodId = periodRow?.linkedPeriodId ?? null;
+  }
+
   const batchFacilityIds = new Set<string>();
   const identityCache = new Map<string, EmployeeIdentity[]>();
 
@@ -216,6 +241,7 @@ export async function ingestBatch(formData: FormData) {
     if (periodId) {
       identityId = await findOrCreateIdentity(
         periodId,
+        linkedPeriodId,
         facilityId,
         { employeeName: emp.employeeName, ssnLast4: emp.ssnLast4, policyNumber: emp.policyNumber },
         carrierName,

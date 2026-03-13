@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/db";
-import { auditRecords, facilityOutreaches, employeeIdentities } from "@/db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { auditRecords, auditPeriods, facilityOutreaches, employeeIdentities } from "@/db/schema";
+import { eq, and, isNull, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export async function classifyEmployee(
@@ -71,12 +71,20 @@ export async function markFacilityDone(
 
   let unclassifiedCount = 0;
   if (outreach.periodId) {
+    let linkedPeriodId: string | null = null;
+    const [periodRow] = await db
+      .select({ linkedPeriodId: auditPeriods.linkedPeriodId })
+      .from(auditPeriods)
+      .where(eq(auditPeriods.id, outreach.periodId));
+    linkedPeriodId = periodRow?.linkedPeriodId ?? null;
+
+    const periodIds = [outreach.periodId!, linkedPeriodId].filter((x): x is string => x !== null);
     const unclassified = await db
       .select({ id: employeeIdentities.id })
       .from(employeeIdentities)
       .where(
         and(
-          eq(employeeIdentities.periodId, outreach.periodId),
+          inArray(employeeIdentities.periodId, periodIds),
           eq(employeeIdentities.facilityId, outreach.facilityId),
           isNull(employeeIdentities.classification)
         )

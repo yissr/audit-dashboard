@@ -3,39 +3,21 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPeriod } from "../actions";
+import {
+  isOverlapMonth,
+  quarterForMonth,
+  lastMonthOfQuarter,
+  monthDates,
+  quarterDates,
+} from "@/lib/period-utils";
 
 const MONTHS = [
   "January","February","March","April","May","June",
   "July","August","September","October","November","December"
 ];
 
-// Months 3,6,9,12 overlap with a quarter — medical should go into quarterly period
-const QUARTER_MONTHS = new Set([2, 5, 8, 11]); // 0-indexed
-
 function getQuarter(month0: number) {
   return Math.floor(month0 / 3) + 1;
-}
-
-function monthDates(year: number, month0: number) {
-  const start = new Date(year, month0, 1);
-  const end = new Date(year, month0 + 1, 0); // last day of month
-  return {
-    name: `${MONTHS[month0]} ${year}`,
-    startDate: start.toISOString().split("T")[0],
-    endDate: end.toISOString().split("T")[0],
-  };
-}
-
-function quarterDates(year: number, q: number) {
-  const startMonth = (q - 1) * 3;
-  const endMonth = startMonth + 2;
-  const start = new Date(year, startMonth, 1);
-  const end = new Date(year, endMonth + 1, 0);
-  return {
-    name: `Q${q} ${year}`,
-    startDate: start.toISOString().split("T")[0],
-    endDate: end.toISOString().split("T")[0],
-  };
 }
 
 export default function NewPeriodForm() {
@@ -49,7 +31,16 @@ export default function NewPeriodForm() {
   const [error, setError] = useState("");
 
   const preview = type === "monthly" ? monthDates(year, month) : quarterDates(year, quarter);
-  const isOverlapMonth = type === "monthly" && QUARTER_MONTHS.has(month);
+
+  // Info note for overlap periods
+  let linkNote: string | null = null;
+  if (type === "monthly" && isOverlapMonth(month)) {
+    const q = quarterForMonth(month);
+    linkNote = `Auto-links to Q${q} ${year} for cross-carrier deduplication`;
+  } else if (type === "quarterly") {
+    const lastMonth = lastMonthOfQuarter(quarter);
+    linkNote = `Auto-links to ${MONTHS[lastMonth]} ${year} for cross-carrier deduplication`;
+  }
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -59,6 +50,8 @@ export default function NewPeriodForm() {
       fd.set("name", preview.name);
       fd.set("startDate", preview.startDate);
       fd.set("endDate", preview.endDate);
+      fd.set("periodType", type);
+      fd.set("monthOrQuarter", String(type === "monthly" ? month : quarter));
       await createPeriod(fd);
       router.push("/periods");
     } catch (e) {
@@ -123,7 +116,7 @@ export default function NewPeriodForm() {
           >
             {MONTHS.map((m, i) => (
               <option key={i} value={i}>
-                {m}{QUARTER_MONTHS.has(i) ? " ⚠" : ""}
+                {m}
               </option>
             ))}
           </select>
@@ -150,12 +143,10 @@ export default function NewPeriodForm() {
         </div>
       )}
 
-      {/* Overlap warning */}
-      {isOverlapMonth && (
-        <div className="bg-amber-50 border border-amber-200 rounded px-3 py-2 text-sm text-amber-800">
-          <strong>{MONTHS[month]}</strong> is the last month of Q{getQuarter(month)} —
-          upload both medical and Guardian files into the <strong>Q{getQuarter(month)} {year}</strong> quarterly
-          period instead so deduplication works across both carriers.
+      {/* Auto-link info note */}
+      {linkNote && (
+        <div className="bg-blue-50 border border-blue-200 rounded px-3 py-2 text-sm text-blue-800">
+          {linkNote}
         </div>
       )}
 
