@@ -32,10 +32,14 @@ const classificationLabels: Record<string, string> = {
 
 export default async function ClassificationPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; facilityId: string }>;
+  searchParams: Promise<{ show?: string }>;
 }) {
   const { id: batchId, facilityId } = await params;
+  const { show } = await searchParams;
+  const showRemoved = show === "removed";
 
   const [batch] = await db
     .select({
@@ -113,6 +117,13 @@ export default async function ClassificationPage({
         )}
       </div>
 
+      {showRemoved && (
+        <div className="flex items-center gap-2 rounded-md bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
+          <span>Showing removed employees only</span>
+          <Link href={`/batches/${batchId}/facilities/${facilityId}`} className="ml-2 underline text-red-600 hover:text-red-800">View all</Link>
+        </div>
+      )}
+
       {outreach && (
         <FacilityActions
           outreachId={outreach.id}
@@ -130,6 +141,7 @@ export default async function ClassificationPage({
             <Card><CardContent className="pt-6 text-center text-gray-400">No employee identities in this facility for this period.</CardContent></Card>
           ) : (
             Array.from(identityMap.values())
+              .filter((i) => !showRemoved || (i.classification !== null && i.classification !== "STILL_EMPLOYED"))
               .sort((a, b) => a.canonicalName.localeCompare(b.canonicalName))
               .map((identity) => (
                 <Card key={identity.id} className={identity.classification && identity.classification !== "STILL_EMPLOYED" ? "border-l-4 border-l-green-400" : ""}>
@@ -178,7 +190,9 @@ export default async function ClassificationPage({
           {records.length === 0 ? (
             <Card><CardContent className="pt-6 text-center text-gray-400">No employees in this facility.</CardContent></Card>
           ) : (
-            records.map((record) => (
+            records
+              .filter((r) => !showRemoved || (r.classification !== null && r.classification !== "STILL_EMPLOYED"))
+              .map((record) => (
               <Card key={record.id} className={record.classification ? "border-l-4 border-l-green-400" : ""}>
                 <CardContent className="pt-4 pb-4">
                   <div className="flex items-start justify-between gap-4 flex-wrap">

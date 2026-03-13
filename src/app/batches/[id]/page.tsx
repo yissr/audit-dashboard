@@ -1,8 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { db } from "@/db";
-import { auditBatches, auditPeriods, auditRecords, carriers, facilities, facilityOutreaches } from "@/db/schema";
-import { eq, count, and } from "drizzle-orm";
+import { auditBatches, auditPeriods, auditRecords, carriers, employeeIdentities, facilities, facilityOutreaches } from "@/db/schema";
+import { eq, count, and, ne, isNotNull, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import OutreachStatusSelect from "./OutreachStatusSelect";
@@ -30,6 +30,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
       sourceFile: auditBatches.sourceFile,
       receivedAt: auditBatches.receivedAt,
       carrierName: carriers.name,
+      periodId: auditBatches.periodId,
       periodName: auditPeriods.name,
     })
     .from(auditBatches)
@@ -85,6 +86,37 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
       facilityOutreaches.repliedAt
     );
 
+  // Removed counts per facility
+  let removedCountMap = new Map<string, number>();
+  if (batch.periodId) {
+    const removedRows = await db
+      .select({ facilityId: auditRecords.facilityId, cnt: sql<number>`count(*)::int` })
+      .from(auditRecords)
+      .leftJoin(employeeIdentities, eq(auditRecords.identityId, employeeIdentities.id))
+      .where(and(
+        eq(auditRecords.batchId, id),
+        isNotNull(employeeIdentities.classification),
+        ne(employeeIdentities.classification, "STILL_EMPLOYED")
+      ))
+      .groupBy(auditRecords.facilityId);
+    for (const row of removedRows) {
+      if (row.facilityId) removedCountMap.set(row.facilityId, row.cnt);
+    }
+  } else {
+    const removedRows = await db
+      .select({ facilityId: auditRecords.facilityId, cnt: sql<number>`count(*)::int` })
+      .from(auditRecords)
+      .where(and(
+        eq(auditRecords.batchId, id),
+        isNotNull(auditRecords.classification),
+        ne(auditRecords.classification, "STILL_EMPLOYED")
+      ))
+      .groupBy(auditRecords.facilityId);
+    for (const row of removedRows) {
+      if (row.facilityId) removedCountMap.set(row.facilityId, row.cnt);
+    }
+  }
+
   const periodName = batch.periodName ?? "";
   const totalFacilities = facilityGroups.length;
   const doneCount = facilityGroups.filter((fg) => fg.outreachStatus === "DONE").length;
@@ -137,6 +169,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                 <tr className="border-b bg-gray-50">
                   <th className="text-left py-3 px-4 font-medium">Facility</th>
                   <th className="text-left py-3 px-4 font-medium">Employees</th>
+                  <th className="text-left py-3 px-4 font-medium">Removed</th>
                   <th className="text-left py-3 px-4 font-medium">Status</th>
                   <th className="text-left py-3 px-4 font-medium">Actions</th>
                 </tr>
@@ -152,6 +185,21 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                         </Link>
                       </td>
                       <td className="py-3 px-4 text-gray-500">{fg.recordCount}</td>
+                      <td className="py-3 px-4">
+                        {(() => {
+                          const rc = removedCountMap.get(fg.facilityId ?? "") ?? 0;
+                          return rc > 0 ? (
+                            <Link
+                              href={`/batches/${id}/facilities/${fg.facilityId}?show=removed`}
+                              className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200"
+                            >
+                              {rc} removed
+                            </Link>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          );
+                        })()}
+                      </td>
                       <td className="py-3 px-4">
                         {fg.outreachId ? (
                           <div className="flex flex-col gap-1">
