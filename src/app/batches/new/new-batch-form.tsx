@@ -36,6 +36,7 @@ export function NewBatchForm({
   const [facilityRows, setFacilityRows] = useState<FacilityRow[]>([]);
   const [carrierId, setCarrierId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   async function handleFilePreview() {
     const file = fileRef.current?.files?.[0];
@@ -48,6 +49,7 @@ export function NewBatchForm({
     setError(null);
 
     try {
+      setSelectedFile(file);
       const fd = new FormData();
       fd.set("file", file);
       const result = await previewFile(fd);
@@ -88,6 +90,11 @@ export function NewBatchForm({
       }
     }
 
+    if (!selectedFile) {
+      setError("File is missing. Please go back and re-select the file.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -101,7 +108,7 @@ export function NewBatchForm({
 
       const fd = new FormData();
       fd.set("carrierId", carrierId);
-      fd.set("file", fileRef.current!.files![0]);
+      fd.set("file", selectedFile);
       fd.set("facilityMappings", JSON.stringify(mappings));
 
       const result = await ingestBatch(fd);
