@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/db";
-import { auditBatches, auditRecords, facilities, facilityOutreaches } from "@/db/schema";
+import { auditBatches, auditRecords, carriers, facilities, facilityOutreaches, employeeIdentities } from "@/db/schema";
 import { autoDetectAndParse, autoDetectAndPreview } from "@/lib/parsers/auto-detect";
 import { revalidatePath } from "next/cache";
 import { eq, and, lte, isNotNull, sql } from "drizzle-orm";
@@ -14,6 +14,95 @@ export type FacilityMapping = {
   newName?: string;
   existingId?: string;
 };
+
+type EmployeeIdentity = typeof employeeIdentities.$inferSelect;
+
+function normalize(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, " ").trim().replace(/\s+/g, " ");
+}
+
+async function findOrCreateIdentity(
+  periodId: string,
+  facilityId: string,
+  emp: { employeeName: string; ssnLast4?: string; policyNumber?: string },
+  carrierName: string,
+  cache: Map<string, EmployeeIdentity[]>
+): Promise<string> {
+  const cacheKey = `${periodId}:${facilityId}`;
+
+  if (!cache.has(cacheKey)) {
+    const existing = await db
+      .select()
+      .from(employeeIdentities)
+      .where(
+        and(
+          eq(employeeIdentities.periodId, periodId),
+          eq(employeeIdentities.facilityId, facilityId)
+        )
+      );
+    cache.set(cacheKey, existing);
+  }
+
+  const identities = cache.get(cacheKey)!;
+  const normName = normalize(emp.employeeName);
+
+  // Matching priority: ssn → policyNumber → name
+  let match: EmployeeIdentity | undefined;
+
+  if (emp.ssnLast4) {
+    match = identities.find((i) => i.ssnLast4 && i.ssnLast4 === emp.ssnLast4);
+  }
+
+  if (!match && emp.policyNumber) {
+    match = identities.find((i) => i.policyNumber && i.policyNumber === emp.policyNumber);
+  }
+
+  if (!match) {
+    match = identities.find((i) => normalize(i.canonicalName) === normName);
+  }
+
+  if (match) {
+    // Update coverageTypes and backfill identifiers if missing
+    const updatedCoverage = match.coverageTypes ?? [];
+    const needsCoverageUpdate = !updatedCoverage.includes(carrierName);
+    const needsSsnUpdate = !match.ssnLast4 && emp.ssnLast4;
+    const needsPolicyUpdate = !match.policyNumber && emp.policyNumber;
+
+    if (needsCoverageUpdate || needsSsnUpdate || needsPolicyUpdate) {
+      const updates: Partial<EmployeeIdentity> = {};
+      if (needsCoverageUpdate) updates.coverageTypes = [...updatedCoverage, carrierName];
+      if (needsSsnUpdate) updates.ssnLast4 = emp.ssnLast4;
+      if (needsPolicyUpdate) updates.policyNumber = emp.policyNumber;
+
+      await db.update(employeeIdentities).set(updates).where(eq(employeeIdentities.id, match.id));
+
+      // Update cache entry
+      const idx = identities.findIndex((i) => i.id === match!.id);
+      if (idx !== -1) {
+        identities[idx] = { ...identities[idx], ...updates };
+      }
+    }
+
+    return match.id;
+  }
+
+  // No match — create new identity
+  const [newIdentity] = await db
+    .insert(employeeIdentities)
+    .values({
+      periodId,
+      facilityId,
+      canonicalName: emp.employeeName,
+      ssnLast4: emp.ssnLast4 ?? null,
+      policyNumber: emp.policyNumber ?? null,
+      coverageTypes: [carrierName],
+      classification: "STILL_EMPLOYED",
+    })
+    .returning();
+
+  identities.push(newIdentity);
+  return newIdentity.id;
+}
 
 export async function previewFile(formData: FormData): Promise<{
   detectedFormat: string;
@@ -45,6 +134,8 @@ export async function previewFile(formData: FormData): Promise<{
 export async function ingestBatch(formData: FormData) {
   const carrierId = formData.get("carrierId") as string;
   const file = formData.get("file") as File;
+  const repId = (formData.get("repId") as string) || null;
+  const periodId = (formData.get("periodId") as string) || null;
 
   if (!carrierId) throw new Error("Carrier is required");
   if (!file || file.size === 0) throw new Error("File is required");
@@ -54,6 +145,13 @@ export async function ingestBatch(formData: FormData) {
   const { employees } = autoDetectAndParse(buffer, file.name);
 
   if (employees.length === 0) throw new Error("No employee records found in file");
+
+  // Get carrier name for identity matching
+  let carrierName = "Unknown";
+  if (periodId) {
+    const [carrierRow] = await db.select({ name: carriers.name }).from(carriers).where(eq(carriers.id, carrierId));
+    if (carrierRow) carrierName = carrierRow.name;
+  }
 
   // Parse facility mappings if provided (from review step)
   const facilityMappingsRaw = formData.get("facilityMappings") as string | null;
@@ -81,9 +179,12 @@ export async function ingestBatch(formData: FormData) {
     carrierId,
     sourceFile: file.name,
     status: "DRAFT",
+    repId: repId || undefined,
+    periodId: periodId || undefined,
   }).returning();
 
   const batchFacilityIds = new Set<string>();
+  const identityCache = new Map<string, EmployeeIdentity[]>();
 
   for (const emp of employees) {
     let facilityId = facilityCache.get(emp.facilityName.toLowerCase());
@@ -110,20 +211,50 @@ export async function ingestBatch(formData: FormData) {
 
     batchFacilityIds.add(facilityId);
 
+    // Identity matching if period is set
+    let identityId: string | undefined;
+    if (periodId) {
+      identityId = await findOrCreateIdentity(
+        periodId,
+        facilityId,
+        { employeeName: emp.employeeName, ssnLast4: emp.ssnLast4, policyNumber: emp.policyNumber },
+        carrierName,
+        identityCache
+      );
+    }
+
     await db.insert(auditRecords).values({
       batchId: batch.id,
       facilityId,
       employeeName: emp.employeeName,
       ssnLast4: emp.ssnLast4,
       policyNumber: emp.policyNumber,
+      identityId: identityId ?? null,
     });
   }
 
+  // Track which (periodId, facilityId) outreaches already exist to avoid duplicates
+  const existingOutreachKeys = new Set<string>();
+  if (periodId) {
+    const existingOutreaches = await db
+      .select({ facilityId: facilityOutreaches.facilityId })
+      .from(facilityOutreaches)
+      .where(eq(facilityOutreaches.periodId, periodId));
+    for (const o of existingOutreaches) {
+      existingOutreachKeys.add(o.facilityId);
+    }
+  }
+
   for (const facilityId of batchFacilityIds) {
+    if (periodId && existingOutreachKeys.has(facilityId)) {
+      // Already have an outreach for this period+facility — skip
+      continue;
+    }
     await db.insert(facilityOutreaches).values({
       batchId: batch.id,
       facilityId,
       status: "DRAFT",
+      periodId: periodId ?? undefined,
     });
   }
 

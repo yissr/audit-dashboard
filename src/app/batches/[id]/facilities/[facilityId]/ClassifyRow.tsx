@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { classifyEmployee } from "../actions";
+import { classifyEmployee, classifyIdentity } from "../actions";
 
 const CLASSIFICATIONS = [
   { value: "STILL_EMPLOYED",  label: "Still Employed",  color: "bg-green-100 text-green-700 hover:bg-green-200" },
@@ -20,9 +20,10 @@ interface Props {
   currentClassification: string | null;
   currentNotes: string;
   currentEffectiveDate: string;
+  identityId?: string;
 }
 
-export default function ClassifyRow({ recordId, currentClassification, currentNotes, currentEffectiveDate }: Props) {
+export default function ClassifyRow({ recordId, currentClassification, currentNotes, currentEffectiveDate, identityId }: Props) {
   const defaultClassification: Classification = "STILL_EMPLOYED";
   const [selected, setSelected] = useState<Classification>(
     (currentClassification as Classification) ?? defaultClassification
@@ -32,11 +33,19 @@ export default function ClassifyRow({ recordId, currentClassification, currentNo
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  async function saveClassification(classification: Classification, notesVal: string, dateVal: string) {
+    if (identityId) {
+      await classifyIdentity(identityId, classification, notesVal, dateVal);
+    } else {
+      await classifyEmployee(recordId, classification, notesVal, dateVal);
+    }
+  }
+
   // Auto-save "Still Employed" default on first render if not yet classified
   useEffect(() => {
     if (!currentClassification) {
       startTransition(async () => {
-        await classifyEmployee(recordId, defaultClassification, "", "");
+        await saveClassification(defaultClassification, "", "");
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -49,7 +58,7 @@ export default function ClassifyRow({ recordId, currentClassification, currentNo
     setError("");
     if (dateRequired && !effectiveDate) return;
     startTransition(async () => {
-      await classifyEmployee(recordId, value, notes, effectiveDate);
+      await saveClassification(value, notes, effectiveDate);
     });
   }
 
@@ -60,7 +69,7 @@ export default function ClassifyRow({ recordId, currentClassification, currentNo
     }
     setError("");
     startTransition(async () => {
-      await classifyEmployee(recordId, selected, notes, effectiveDate);
+      await saveClassification(selected, notes, effectiveDate);
     });
   }
 

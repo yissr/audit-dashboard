@@ -22,7 +22,7 @@ export default async function CarriersPage() {
             <Card key={c.id}>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{c.name}</CardTitle>
+                  <CardTitle className="text-base"><Link href={`/carriers/${c.id}`} className="hover:underline text-[#1B2A4A]">{c.name}</Link></CardTitle>
                   <Badge variant="outline">{c.fileType}</Badge>
                 </div>
               </CardHeader>

@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { auditRecords, facilityOutreaches } from "@/db/schema";
+import { auditRecords, facilityOutreaches, employeeIdentities } from "@/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
@@ -35,6 +35,27 @@ export async function classifyEmployee(
   }
 }
 
+export async function classifyIdentity(
+  identityId: string,
+  classification: "STILL_EMPLOYED" | "TERMINATED" | "TRANSFERRED" | "FMLA" | "LOA" | "WORKERS_COMP" | "NOT_ON_PAYROLL",
+  notes: string,
+  effectiveDate: string
+): Promise<void> {
+  if (!identityId) throw new Error("Identity ID is required");
+  await db
+    .update(employeeIdentities)
+    .set({
+      classification,
+      classificationNotes: notes || null,
+      effectiveDate: effectiveDate ? new Date(effectiveDate) : null,
+      classifiedBy: "dashboard-user",
+      classifiedAt: new Date(),
+    })
+    .where(eq(employeeIdentities.id, identityId));
+  // revalidate broadly since we don't have batchId here
+  revalidatePath("/batches", "layout");
+}
+
 export async function markFacilityDone(
   outreachId: string,
   batchId: string
@@ -42,25 +63,40 @@ export async function markFacilityDone(
   if (!outreachId) throw new Error("Outreach ID is required");
 
   const [outreach] = await db
-    .select({ facilityId: facilityOutreaches.facilityId })
+    .select({ facilityId: facilityOutreaches.facilityId, periodId: facilityOutreaches.periodId })
     .from(facilityOutreaches)
     .where(eq(facilityOutreaches.id, outreachId));
 
   if (!outreach) throw new Error("Outreach record not found");
 
-  const unclassified = await db
-    .select({ id: auditRecords.id })
-    .from(auditRecords)
-    .where(
-      and(
-        eq(auditRecords.batchId, batchId),
-        eq(auditRecords.facilityId, outreach.facilityId),
-        isNull(auditRecords.classification)
-      )
-    );
-
-  if (unclassified.length > 0) {
-    throw new Error(`${unclassified.length} employee(s) still need classification before marking done.`);
+  let unclassifiedCount = 0;
+  if (outreach.periodId) {
+    const unclassified = await db
+      .select({ id: employeeIdentities.id })
+      .from(employeeIdentities)
+      .where(
+        and(
+          eq(employeeIdentities.periodId, outreach.periodId),
+          eq(employeeIdentities.facilityId, outreach.facilityId),
+          isNull(employeeIdentities.classification)
+        )
+      );
+    unclassifiedCount = unclassified.length;
+  } else {
+    const unclassified = await db
+      .select({ id: auditRecords.id })
+      .from(auditRecords)
+      .where(
+        and(
+          eq(auditRecords.batchId, batchId),
+          eq(auditRecords.facilityId, outreach.facilityId),
+          isNull(auditRecords.classification)
+        )
+      );
+    unclassifiedCount = unclassified.length;
+  }
+  if (unclassifiedCount > 0) {
+    throw new Error(`${unclassifiedCount} employee(s) still need classification before marking done.`);
   }
 
   await db

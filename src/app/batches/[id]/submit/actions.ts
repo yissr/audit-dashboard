@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { auditBatches, auditRecords, carriers, facilities } from "@/db/schema";
+import { auditBatches, auditRecords, carriers, facilities, employeeIdentities } from "@/db/schema";
 import { eq, and, ne, isNotNull } from "drizzle-orm";
 import { sendEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
@@ -22,6 +22,7 @@ export async function getSubmissionData(batchId: string) {
       submittedAt: auditBatches.submittedAt,
       carrierName: carriers.name,
       sourceFile: auditBatches.sourceFile,
+      periodId: auditBatches.periodId,
     })
     .from(auditBatches)
     .leftJoin(carriers, eq(auditBatches.carrierId, carriers.id))
@@ -29,31 +30,65 @@ export async function getSubmissionData(batchId: string) {
 
   if (!batch) return null;
 
-  const records = await db
-    .select({
-      employeeName: auditRecords.employeeName,
-      facilityName: facilities.name,
-      classification: auditRecords.classification,
-      effectiveDate: auditRecords.effectiveDate,
-      notes: auditRecords.classificationNotes,
-    })
-    .from(auditRecords)
-    .leftJoin(facilities, eq(auditRecords.facilityId, facilities.id))
-    .where(
-      and(
-        eq(auditRecords.batchId, batchId),
-        isNotNull(auditRecords.classification),
-        ne(auditRecords.classification, "STILL_EMPLOYED")
-      )
-    );
+  let terminations: TerminationRecord[];
 
-  const terminations: TerminationRecord[] = records.map((r) => ({
-    employeeName: r.employeeName,
-    facilityName: r.facilityName ?? "Unknown",
-    classification: r.classification ?? "",
-    effectiveDate: r.effectiveDate ? new Date(r.effectiveDate).toLocaleDateString() : "",
-    notes: r.notes ?? "",
-  }));
+  if (batch.periodId) {
+    // Period-aware: join through identities
+    const records = await db
+      .select({
+        employeeName: auditRecords.employeeName,
+        facilityName: facilities.name,
+        classification: employeeIdentities.classification,
+        effectiveDate: employeeIdentities.effectiveDate,
+        notes: employeeIdentities.classificationNotes,
+      })
+      .from(auditRecords)
+      .leftJoin(facilities, eq(auditRecords.facilityId, facilities.id))
+      .leftJoin(employeeIdentities, eq(auditRecords.identityId, employeeIdentities.id))
+      .where(
+        and(
+          eq(auditRecords.batchId, batchId),
+          isNotNull(auditRecords.identityId),
+          isNotNull(employeeIdentities.classification),
+          ne(employeeIdentities.classification, "STILL_EMPLOYED")
+        )
+      );
+
+    terminations = records.map((r) => ({
+      employeeName: r.employeeName,
+      facilityName: r.facilityName ?? "Unknown",
+      classification: r.classification ?? "",
+      effectiveDate: r.effectiveDate ? new Date(r.effectiveDate).toLocaleDateString() : "",
+      notes: r.notes ?? "",
+    }));
+  } else {
+    // Original behavior
+    const records = await db
+      .select({
+        employeeName: auditRecords.employeeName,
+        facilityName: facilities.name,
+        classification: auditRecords.classification,
+        effectiveDate: auditRecords.effectiveDate,
+        notes: auditRecords.classificationNotes,
+      })
+      .from(auditRecords)
+      .leftJoin(facilities, eq(auditRecords.facilityId, facilities.id))
+      .where(
+        and(
+          eq(auditRecords.batchId, batchId),
+          isNotNull(auditRecords.classification),
+          ne(auditRecords.classification, "STILL_EMPLOYED")
+        )
+      );
+
+    terminations = records.map((r) => ({
+      employeeName: r.employeeName,
+      facilityName: r.facilityName ?? "Unknown",
+      classification: r.classification ?? "",
+      effectiveDate: r.effectiveDate ? new Date(r.effectiveDate).toLocaleDateString() : "",
+      notes: r.notes ?? "",
+    }));
+  }
 
   return { batch, terminations };
 }

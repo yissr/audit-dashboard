@@ -23,9 +23,13 @@ interface FacilityRow extends PreviewFacility {
 export function NewBatchForm({
   carriers,
   existingFacilities,
+  allReps,
+  periods,
 }: {
   carriers: { id: string; name: string }[];
   existingFacilities: { id: string; name: string }[];
+  allReps: { id: string; carrierId: string; name: string }[];
+  periods: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -35,8 +39,13 @@ export function NewBatchForm({
   const [detectedFormat, setDetectedFormat] = useState("");
   const [facilityRows, setFacilityRows] = useState<FacilityRow[]>([]);
   const [carrierId, setCarrierId] = useState("");
+  const [repId, setRepId] = useState("");
+  const [periodId, setPeriodId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // Filter reps to those belonging to the currently selected carrier
+  const filteredReps = allReps.filter((r) => r.carrierId === carrierId);
 
   async function handleFilePreview() {
     const file = fileRef.current?.files?.[0];
@@ -110,6 +119,8 @@ export function NewBatchForm({
       fd.set("carrierId", carrierId);
       fd.set("file", selectedFile);
       fd.set("facilityMappings", JSON.stringify(mappings));
+      if (repId) fd.set("repId", repId);
+      if (periodId) fd.set("periodId", periodId);
 
       const result = await ingestBatch(fd);
       router.push(`/batches/${result.batchId}`);
@@ -138,7 +149,7 @@ export function NewBatchForm({
                 className="w-full border rounded-md px-3 py-2 text-sm"
                 required
                 value={carrierId}
-                onChange={(e) => setCarrierId(e.target.value)}
+                onChange={(e) => { setCarrierId(e.target.value); setRepId(""); }}
               >
                 <option value="">Select a carrier...</option>
                 {carriers.map((c) => (
@@ -156,6 +167,57 @@ export function NewBatchForm({
                 </p>
               )}
             </div>
+
+            {carrierId && (
+              <div>
+                <Label htmlFor="repId">Carrier Rep (optional)</Label>
+                <select
+                  name="repId"
+                  id="repId"
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  value={repId}
+                  onChange={(e) => setRepId(e.target.value)}
+                >
+                  <option value="">No specific rep</option>
+                  {filteredReps.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+                {filteredReps.length === 0 && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    No reps for this carrier.{" "}
+                    <a href={`/carriers/${carrierId}`} className="underline">Add reps on the carrier page.</a>
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div>
+              <Label htmlFor="periodId">Audit Period (optional)</Label>
+              <select
+                name="periodId"
+                id="periodId"
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={periodId}
+                onChange={(e) => setPeriodId(e.target.value)}
+              >
+                <option value="">No period</option>
+                {periods.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              {periods.length === 0 && (
+                <p className="text-xs text-gray-400 mt-1">
+                  No periods yet.{" "}
+                  <a href="/periods/new" className="underline">Create a period first.</a>
+                </p>
+              )}
+            </div>
+
             <div>
               <Label htmlFor="file">Carrier File (CSV or XLSX) *</Label>
               <input

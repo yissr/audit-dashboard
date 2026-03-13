@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { db } from "@/db";
-import { auditBatches, auditRecords, carriers, facilities, facilityOutreaches } from "@/db/schema";
+import { auditBatches, auditRecords, carriers, facilities, facilityOutreaches, employeeIdentities } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -37,7 +37,12 @@ export default async function ClassificationPage({
   const { id: batchId, facilityId } = await params;
 
   const [batch] = await db
-    .select({ id: auditBatches.id, sourceFile: auditBatches.sourceFile, carrierName: carriers.name })
+    .select({
+      id: auditBatches.id,
+      sourceFile: auditBatches.sourceFile,
+      carrierName: carriers.name,
+      periodId: auditBatches.periodId,
+    })
     .from(auditBatches)
     .leftJoin(carriers, eq(auditBatches.carrierId, carriers.id))
     .where(eq(auditBatches.id, batchId));
@@ -58,7 +63,26 @@ export default async function ClassificationPage({
     .where(and(eq(auditRecords.batchId, batchId), eq(auditRecords.facilityId, facilityId)))
     .orderBy(auditRecords.employeeName);
 
-  const classifiedCount = records.filter((r) => r.classification !== null).length;
+  // If batch has a period, load identities for this (period, facility)
+  let identityMap = new Map<string, typeof employeeIdentities.$inferSelect>();
+  if (batch.periodId) {
+    const identitiesForFacility = await db
+      .select()
+      .from(employeeIdentities)
+      .where(
+        and(
+          eq(employeeIdentities.periodId, batch.periodId),
+          eq(employeeIdentities.facilityId, facilityId)
+        )
+      );
+    for (const identity of identitiesForFacility) {
+      identityMap.set(identity.id, identity);
+    }
+  }
+
+  const classifiedCount = batch.periodId
+    ? Array.from(identityMap.values()).filter((i) => i.classification !== null).length
+    : records.filter((r) => r.classification !== null).length;
 
   return (
     <div className="space-y-6">
@@ -68,7 +92,7 @@ export default async function ClassificationPage({
         </Link>
         <h1 className="text-2xl font-bold text-[#1B2A4A] mt-1">{facility.name}</h1>
         <p className="text-sm text-gray-500 mt-1">
-          {classifiedCount} / {records.length} employees classified
+          {classifiedCount} / {batch.periodId ? identityMap.size : records.length} employees classified
           {outreach && <span className="ml-3">· Status: <span className="font-medium">{outreach.status}</span></span>}
         </p>
         {outreach?.incompleteReason && (
@@ -84,49 +108,99 @@ export default async function ClassificationPage({
           batchId={batchId}
           currentStatus={outreach.status ?? "DRAFT"}
           classifiedCount={classifiedCount}
-          totalCount={records.length}
+          totalCount={batch.periodId ? identityMap.size : records.length}
         />
       )}
 
-      <div className="space-y-3">
-        {records.length === 0 ? (
-          <Card><CardContent className="pt-6 text-center text-gray-400">No employees in this facility.</CardContent></Card>
-        ) : (
-          records.map((record) => (
-            <Card key={record.id} className={record.classification ? "border-l-4 border-l-green-400" : ""}>
-              <CardContent className="pt-4 pb-4">
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                  <div className="min-w-0">
-                    <div className="font-medium text-sm">{record.employeeName}</div>
-                    {record.policyNumber && (
-                      <div className="text-xs text-gray-400 mt-0.5">ID: {record.policyNumber}</div>
-                    )}
-                    {record.classification && (
-                      <span className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${classificationColors[record.classification]}`}>
-                        {classificationLabels[record.classification]}
-                        {record.effectiveDate && ` · ${new Date(record.effectiveDate).toLocaleDateString()}`}
-                      </span>
-                    )}
-                    {record.classificationNotes && (
-                      <div className="text-xs text-gray-500 mt-1 italic">{record.classificationNotes}</div>
-                    )}
+      {batch.periodId ? (
+        // Period-aware view: show identities
+        <div className="space-y-3">
+          {identityMap.size === 0 ? (
+            <Card><CardContent className="pt-6 text-center text-gray-400">No employee identities in this facility for this period.</CardContent></Card>
+          ) : (
+            Array.from(identityMap.values())
+              .sort((a, b) => a.canonicalName.localeCompare(b.canonicalName))
+              .map((identity) => (
+                <Card key={identity.id} className={identity.classification && identity.classification !== "STILL_EMPLOYED" ? "border-l-4 border-l-green-400" : ""}>
+                  <CardContent className="pt-4 pb-4">
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm">{identity.canonicalName}</div>
+                        {identity.policyNumber && (
+                          <div className="text-xs text-gray-400 mt-0.5">ID: {identity.policyNumber}</div>
+                        )}
+                        {identity.coverageTypes && identity.coverageTypes.length > 0 && (
+                          <div className="text-xs text-blue-500 mt-0.5">{identity.coverageTypes.join(" · ")}</div>
+                        )}
+                        {identity.classification && (
+                          <span className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${classificationColors[identity.classification]}`}>
+                            {classificationLabels[identity.classification]}
+                            {identity.effectiveDate && ` · ${new Date(identity.effectiveDate).toLocaleDateString()}`}
+                          </span>
+                        )}
+                        {identity.classificationNotes && (
+                          <div className="text-xs text-gray-500 mt-1 italic">{identity.classificationNotes}</div>
+                        )}
+                      </div>
+                      <ClassifyRow
+                        recordId={identity.id}
+                        currentClassification={identity.classification}
+                        currentNotes={identity.classificationNotes ?? ""}
+                        currentEffectiveDate={
+                          identity.effectiveDate
+                            ? new Date(identity.effectiveDate).toISOString().split("T")[0]
+                            : ""
+                        }
+                        identityId={identity.id}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+          )}
+        </div>
+      ) : (
+        // Non-period view: existing behavior
+        <div className="space-y-3">
+          {records.length === 0 ? (
+            <Card><CardContent className="pt-6 text-center text-gray-400">No employees in this facility.</CardContent></Card>
+          ) : (
+            records.map((record) => (
+              <Card key={record.id} className={record.classification ? "border-l-4 border-l-green-400" : ""}>
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm">{record.employeeName}</div>
+                      {record.policyNumber && (
+                        <div className="text-xs text-gray-400 mt-0.5">ID: {record.policyNumber}</div>
+                      )}
+                      {record.classification && (
+                        <span className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${classificationColors[record.classification]}`}>
+                          {classificationLabels[record.classification]}
+                          {record.effectiveDate && ` · ${new Date(record.effectiveDate).toLocaleDateString()}`}
+                        </span>
+                      )}
+                      {record.classificationNotes && (
+                        <div className="text-xs text-gray-500 mt-1 italic">{record.classificationNotes}</div>
+                      )}
+                    </div>
+                    <ClassifyRow
+                      recordId={record.id}
+                      currentClassification={record.classification}
+                      currentNotes={record.classificationNotes ?? ""}
+                      currentEffectiveDate={
+                        record.effectiveDate
+                          ? new Date(record.effectiveDate).toISOString().split("T")[0]
+                          : ""
+                      }
+                    />
                   </div>
-                  <ClassifyRow
-                    recordId={record.id}
-                    currentClassification={record.classification}
-                    currentNotes={record.classificationNotes ?? ""}
-                    currentEffectiveDate={
-                      record.effectiveDate
-                        ? new Date(record.effectiveDate).toISOString().split("T")[0]
-                        : ""
-                    }
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

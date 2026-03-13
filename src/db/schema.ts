@@ -23,6 +23,15 @@ export const carriers = pgTable("carriers", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const carrierReps = pgTable("carrier_reps", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  carrierId: uuid("carrier_id").notNull().references(() => carriers.id),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const facilities = pgTable("facilities", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
@@ -34,6 +43,14 @@ export const facilities = pgTable("facilities", {
   uniqueIndex("facilities_name_unique").on(t.name),
 ]);
 
+export const auditPeriods = pgTable("audit_periods", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const auditBatches = pgTable("audit_batches", {
   id: uuid("id").primaryKey().defaultRandom(),
   carrierId: uuid("carrier_id").notNull().references(() => carriers.id),
@@ -41,6 +58,24 @@ export const auditBatches = pgTable("audit_batches", {
   status: batchStatusEnum("status").default("DRAFT"),
   sourceFile: text("source_file"),
   submittedAt: timestamp("submitted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  repId: uuid("rep_id").references(() => carrierReps.id),
+  periodId: uuid("period_id").references(() => auditPeriods.id),
+});
+
+export const employeeIdentities = pgTable("employee_identities", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  periodId: uuid("period_id").notNull().references(() => auditPeriods.id),
+  facilityId: uuid("facility_id").notNull().references(() => facilities.id),
+  canonicalName: text("canonical_name").notNull(),
+  ssnLast4: text("ssn_last4"),
+  policyNumber: text("policy_number"),
+  coverageTypes: json("coverage_types").$type<string[]>().default([]),
+  classification: classificationEnum("classification").default("STILL_EMPLOYED"),
+  classificationNotes: text("classification_notes"),
+  effectiveDate: timestamp("effective_date"),
+  classifiedBy: text("classified_by"),
+  classifiedAt: timestamp("classified_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -59,6 +94,7 @@ export const auditRecords = pgTable("audit_records", {
   classifiedAt: timestamp("classified_at"),
   createdAt: timestamp("created_at").defaultNow(),
   version: integer("version").default(1),
+  identityId: uuid("identity_id").references(() => employeeIdentities.id),
 });
 
 export const facilityOutreaches = pgTable("facility_outreaches", {
@@ -82,6 +118,7 @@ export const facilityOutreaches = pgTable("facility_outreaches", {
   doneAt: timestamp("done_at"),
   createdAt: timestamp("created_at").defaultNow(),
   version: integer("version").default(1),
+  periodId: uuid("period_id").references(() => auditPeriods.id),
 });
 
 export const inboundEmails = pgTable("inbound_emails", {
