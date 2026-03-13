@@ -29,7 +29,7 @@ export function NewBatchForm({
   carriers: { id: string; name: string }[];
   existingFacilities: { id: string; name: string }[];
   allReps: { id: string; carrierId: string; name: string }[];
-  periods: { id: string; name: string }[];
+  periods: { id: string; name: string; startDate?: Date | string | null }[];
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -195,20 +195,31 @@ export function NewBatchForm({
             )}
 
             <div>
-              <Label htmlFor="periodId">Audit Period (optional)</Label>
+              <Label htmlFor="periodId">Period (required)</Label>
               <select
                 name="periodId"
                 id="periodId"
                 className="w-full border rounded-md px-3 py-2 text-sm"
+                required
                 value={periodId}
                 onChange={(e) => setPeriodId(e.target.value)}
               >
-                <option value="">No period</option>
-                {periods.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
+                <option value="">Select a period...</option>
+                {[...periods]
+                  .sort((a, b) => {
+                    const aTime = a.startDate ? new Date(a.startDate).getTime() : 0;
+                    const bTime = b.startDate ? new Date(b.startDate).getTime() : 0;
+                    return bTime - aTime;
+                  })
+                  .map((p) => {
+                    const isQuarterly = /^Q\d/.test(p.name);
+                    const label = isQuarterly ? `${p.name} (Quarterly)` : `${p.name} (Monthly)`;
+                    return (
+                      <option key={p.id} value={p.id}>
+                        {label}
+                      </option>
+                    );
+                  })}
               </select>
               {periods.length === 0 && (
                 <p className="text-xs text-gray-400 mt-1">
@@ -236,7 +247,7 @@ export function NewBatchForm({
               type="button"
               className="w-full"
               onClick={handleFilePreview}
-              disabled={loading}
+              disabled={loading || !periodId}
             >
               {loading ? "Analyzing file..." : "Preview Facilities"}
             </Button>

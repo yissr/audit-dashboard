@@ -152,6 +152,7 @@ export async function ingestBatch(formData: FormData) {
   const repId = (formData.get("repId") as string) || null;
   const periodId = (formData.get("periodId") as string) || null;
 
+  if (!periodId) throw new Error("Period is required");
   if (!carrierId) throw new Error("Carrier is required");
   if (!file || file.size === 0) throw new Error("File is required");
   if (file.size > MAX_FILE_SIZE) throw new Error("File exceeds 10 MB limit");

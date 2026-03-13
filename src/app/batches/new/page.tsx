@@ -18,7 +18,7 @@ export default async function NewBatchPage() {
         carriers={carrierList}
         existingFacilities={existingFacilities.map((f) => ({ id: f.id, name: f.name }))}
         allReps={reps.map((r) => ({ id: r.id, carrierId: r.carrierId, name: r.name }))}
-        periods={periods.map((p) => ({ id: p.id, name: p.name }))}
+        periods={periods.map((p) => ({ id: p.id, name: p.name, startDate: p.startDate }))}
       />
     </div>
   );
