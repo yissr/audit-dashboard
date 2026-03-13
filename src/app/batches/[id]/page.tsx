@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import OutreachStatusSelect from "./OutreachStatusSelect";
 import FacilityRowActions from "./FacilityRowActions";
+import OutreachEmailThread from "./OutreachEmailThread";
 import { checkAndWakeExpiredSnoozes } from "../actions";
 import Link from "next/link";
 
@@ -48,6 +49,10 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
       snoozeUntil: facilityOutreaches.snoozeUntil,
       reminderCount: facilityOutreaches.reminderCount,
       lastReminderAt: facilityOutreaches.lastReminderAt,
+      emailBodyHtml: facilityOutreaches.emailBodyHtml,
+      sentAt: facilityOutreaches.sentAt,
+      replyRaw: facilityOutreaches.replyRaw,
+      repliedAt: facilityOutreaches.repliedAt,
     })
     .from(auditRecords)
     .leftJoin(facilities, eq(auditRecords.facilityId, facilities.id))
@@ -66,12 +71,19 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
       facilityOutreaches.status,
       facilityOutreaches.snoozeUntil,
       facilityOutreaches.reminderCount,
-      facilityOutreaches.lastReminderAt
+      facilityOutreaches.lastReminderAt,
+      facilityOutreaches.emailBodyHtml,
+      facilityOutreaches.sentAt,
+      facilityOutreaches.replyRaw,
+      facilityOutreaches.repliedAt
     );
 
   const totalFacilities = facilityGroups.length;
   const doneCount = facilityGroups.filter((fg) => fg.outreachStatus === "DONE").length;
   const donePercent = totalFacilities > 0 ? Math.round((doneCount / totalFacilities) * 100) : 0;
+  const outreachedCount = facilityGroups.filter((fg) => fg.sentAt != null || (fg.outreachStatus && fg.outreachStatus !== "DRAFT")).length;
+  const repliedCount = facilityGroups.filter((fg) => fg.outreachStatus === "REPLIED" || fg.outreachStatus === "DONE" || fg.outreachStatus === "INCOMPLETE").length;
+  const classifiedCount = doneCount;
 
   return (
     <div className="space-y-6">
@@ -91,6 +103,9 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div className="bg-green-500 h-2 rounded-full" style={{ width: `${donePercent}%` }} />
           </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Outreached: {outreachedCount}/{totalFacilities} · Replied: {repliedCount}/{totalFacilities} · Classified: {classifiedCount}/{totalFacilities}
+          </p>
         </CardContent>
       </Card>
 
@@ -160,6 +175,12 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                               lastReminderAt={fg.lastReminderAt ? fg.lastReminderAt.toISOString() : null}
                             />
                           )}
+                          <OutreachEmailThread
+                            sentHtml={fg.emailBodyHtml ?? null}
+                            sentAt={fg.sentAt ? fg.sentAt.toISOString() : null}
+                            replyText={fg.replyRaw ?? null}
+                            repliedAt={fg.repliedAt ? fg.repliedAt.toISOString() : null}
+                          />
                         </div>
                       </td>
                     </tr>

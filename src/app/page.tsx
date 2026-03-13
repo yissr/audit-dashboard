@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { db } from "@/db";
-import { auditBatches, auditPeriods, auditRecords, carriers } from "@/db/schema";
+import { auditBatches, auditPeriods, auditRecords, carriers, facilityOutreaches } from "@/db/schema";
 import { eq, inArray, sql } from "drizzle-orm";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
@@ -50,6 +50,17 @@ export default async function DashboardPage() {
       : [];
   const recordCountMap = new Map(recordCountRows.map((r) => [r.batchId, r.count]));
 
+  // 5b. Count DONE outreaches per batch
+  const doneOutreachRows =
+    batchRows.length > 0
+      ? await db
+          .select({ batchId: facilityOutreaches.batchId, doneCount: sql<number>`count(*)::int` })
+          .from(facilityOutreaches)
+          .where(eq(facilityOutreaches.status, "DONE"))
+          .groupBy(facilityOutreaches.batchId)
+      : [];
+  const doneOutreachMap = new Map(doneOutreachRows.map((r) => [r.batchId, r.doneCount]));
+
   // 6. Group batches by periodId
   const batchesByPeriod = new Map<string, typeof batchRows>();
   for (const batch of batchRows) {
@@ -69,6 +80,7 @@ export default async function DashboardPage() {
       status: string | null;
       recordCount: number;
       quarterlyLabel: string | null;
+      facilitiesDone: number;
     }>;
   };
 
@@ -103,6 +115,7 @@ export default async function DashboardPage() {
         status: b.status ?? null,
         recordCount: recordCountMap.get(b.id) ?? 0,
         quarterlyLabel: b.quarterlyLabel,
+        facilitiesDone: doneOutreachMap.get(b.id) ?? 0,
       })),
     });
   }
@@ -166,17 +179,28 @@ export default async function DashboardPage() {
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums text-gray-600">{batch.recordCount}</td>
                       <td className="px-4 py-3">
-                        <Badge
-                          variant={
-                            batch.status === "SUBMITTED"
-                              ? "default"
-                              : batch.status === "CLOSED"
-                              ? "secondary"
-                              : "outline"
-                          }
-                        >
-                          {batch.status ?? "DRAFT"}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={
+                              batch.status === "SUBMITTED"
+                                ? "default"
+                                : batch.status === "CLOSED"
+                                ? "secondary"
+                                : "outline"
+                            }
+                          >
+                            {batch.status ?? "DRAFT"}
+                          </Badge>
+                          {batch.status === "SUBMITTED" && (
+                            <span className="text-xs text-green-600 font-medium">✓ Submitted</span>
+                          )}
+                          {batch.status === "CLOSED" && (
+                            <span className="text-xs text-gray-500">Closed</span>
+                          )}
+                        </div>
+                        {batch.facilitiesDone > 0 && (
+                          <p className="text-xs text-gray-400 mt-0.5">{batch.facilitiesDone} facilities done</p>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs">
                         {batch.quarterlyLabel ? (
