@@ -4,12 +4,14 @@ import { useState, useTransition } from "react";
 import { classifyEmployee } from "../actions";
 
 const CLASSIFICATIONS = [
-  { value: "STILL_EMPLOYED", label: "Still Employed", color: "bg-green-100 text-green-700 hover:bg-green-200" },
-  { value: "TERMINATED", label: "Terminated", color: "bg-red-100 text-red-700 hover:bg-red-200" },
-  { value: "QUIT", label: "Quit", color: "bg-orange-100 text-orange-700 hover:bg-orange-200" },
-  { value: "SICK_LEAVE", label: "Sick Leave", color: "bg-blue-100 text-blue-700 hover:bg-blue-200" },
-  { value: "FAMILY_LEAVE", label: "Family Leave", color: "bg-purple-100 text-purple-700 hover:bg-purple-200" },
-  { value: "OTHER", label: "Other", color: "bg-gray-100 text-gray-700 hover:bg-gray-200" },
+  { value: "STILL_EMPLOYED", label: "Still Employed",   color: "bg-green-100 text-green-700 hover:bg-green-200" },
+  { value: "TERMINATED",     label: "Terminated",       color: "bg-red-100 text-red-700 hover:bg-red-200" },
+  { value: "TRANSFERRED",    label: "Transferred",      color: "bg-cyan-100 text-cyan-700 hover:bg-cyan-200" },
+  { value: "QUIT",           label: "Quit / Vol. Term", color: "bg-orange-100 text-orange-700 hover:bg-orange-200" },
+  { value: "FMLA",           label: "FMLA",             color: "bg-purple-100 text-purple-700 hover:bg-purple-200" },
+  { value: "STD",            label: "STD",              color: "bg-blue-100 text-blue-700 hover:bg-blue-200" },
+  { value: "OTHER_LOA",      label: "Other LOA",        color: "bg-yellow-100 text-yellow-700 hover:bg-yellow-200" },
+  { value: "OTHER",          label: "Other",            color: "bg-gray-100 text-gray-700 hover:bg-gray-200" },
 ] as const;
 
 type Classification = (typeof CLASSIFICATIONS)[number]["value"];
@@ -28,13 +30,11 @@ export default function ClassifyRow({ recordId, currentClassification, currentNo
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  // Still Employed doesn't need an effective date
   const dateRequired = selected !== null && selected !== "STILL_EMPLOYED";
 
   function handleSelect(value: Classification) {
     setSelected(value);
     setError("");
-    // Don't save yet if date is required but missing
     if (value !== "STILL_EMPLOYED" && !effectiveDate) return;
     startTransition(async () => {
       await classifyEmployee(recordId, value, notes, effectiveDate);

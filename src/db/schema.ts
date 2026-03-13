@@ -8,7 +8,7 @@ export const facilityStatusEnum = pgEnum("facility_status", [
   "DRAFT", "SENT", "REPLIED", "INCOMPLETE", "DONE"
 ]);
 export const classificationEnum = pgEnum("classification", [
-  "STILL_EMPLOYED", "TERMINATED", "QUIT", "SICK_LEAVE", "FAMILY_LEAVE", "OTHER"
+  "STILL_EMPLOYED", "TERMINATED", "TRANSFERRED", "QUIT", "FMLA", "STD", "OTHER_LOA", "OTHER"
 ]);
 export const inboundEmailStatusEnum = pgEnum("inbound_email_status", [
   "PENDING", "MATCHED", "FAILED", "IGNORED"

@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 
 export async function classifyEmployee(
   recordId: string,
-  classification: "STILL_EMPLOYED" | "TERMINATED" | "QUIT" | "SICK_LEAVE" | "FAMILY_LEAVE" | "OTHER",
+  classification: "STILL_EMPLOYED" | "TERMINATED" | "TRANSFERRED" | "QUIT" | "FMLA" | "STD" | "OTHER_LOA" | "OTHER",
   notes?: string,
   effectiveDate?: string
 ): Promise<void> {
