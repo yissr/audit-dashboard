@@ -13,22 +13,20 @@ const classificationColors: Record<string, string> = {
   STILL_EMPLOYED: "bg-green-100 text-green-700",
   TERMINATED:     "bg-red-100 text-red-700",
   TRANSFERRED:    "bg-cyan-100 text-cyan-700",
-  QUIT:           "bg-orange-100 text-orange-700",
   FMLA:           "bg-purple-100 text-purple-700",
-  STD:            "bg-blue-100 text-blue-700",
-  OTHER_LOA:      "bg-yellow-100 text-yellow-700",
-  OTHER:          "bg-gray-100 text-gray-700",
+  LOA:            "bg-yellow-100 text-yellow-700",
+  WORKERS_COMP:   "bg-orange-100 text-orange-700",
+  NOT_ON_PAYROLL: "bg-gray-100 text-gray-700",
 };
 
 const classificationLabels: Record<string, string> = {
   STILL_EMPLOYED: "Still Employed",
   TERMINATED:     "Terminated",
   TRANSFERRED:    "Transferred",
-  QUIT:           "Quit / Vol. Term",
   FMLA:           "FMLA",
-  STD:            "STD",
-  OTHER_LOA:      "Other LOA",
-  OTHER:          "Other",
+  LOA:            "LOA",
+  WORKERS_COMP:   "Workers' Comp",
+  NOT_ON_PAYROLL: "Not on Payroll",
 };
 
 export default async function ClassificationPage({
