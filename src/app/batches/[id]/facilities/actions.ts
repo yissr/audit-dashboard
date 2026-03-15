@@ -276,6 +276,7 @@ export async function markFacilityIncomplete(
   revalidatePath(`/batches/${batchId}`);
 }
 
+
 export async function sendIncompleteNotice(outreachId: string, reason: string): Promise<void> {
   if (!outreachId) throw new Error("Outreach ID is required");
   if (!reason.trim()) throw new Error("Reason is required");
@@ -297,18 +298,47 @@ export async function sendIncompleteNotice(outreachId: string, reason: string): 
 
   if (!row) throw new Error("Outreach not found");
 
+  // Fetch employee names (same logic as sendOutreachEmail)
+  const batchRecords = await db
+    .select({ employeeName: auditRecords.employeeName, identityId: auditRecords.identityId })
+    .from(auditRecords)
+    .where(and(eq(auditRecords.batchId, row.batchId), eq(auditRecords.facilityId, row.facilityId)));
+
+  let employeeNames: string[] = [];
+  if (batchRecords.some((r) => r.identityId)) {
+    const identityIds = [...new Set(batchRecords.map((r) => r.identityId).filter((x): x is string => x !== null))];
+    if (identityIds.length > 0) {
+      const identities = await db
+        .select({ canonicalName: employeeIdentities.canonicalName })
+        .from(employeeIdentities)
+        .where(inArray(employeeIdentities.id, identityIds));
+      employeeNames = identities.map((i) => i.canonicalName).sort();
+    }
+  } else {
+    employeeNames = [...new Set(batchRecords.map((r) => r.employeeName))].sort();
+  }
+
+  const NL ="\n";
+  const employeeListText = employeeNames.length > 0
+    ? NL + NL + "Employee List (" + employeeNames.length + " employees):" + NL + employeeNames.map((n, i) => (i + 1) + ". " + n).join(NL)
+    : "";
+
   const facilityName = row.facilityName ?? "Facility";
-  const subject = `Follow-up Required: Workers' Compensation Audit — ${facilityName}`;
-  const bodyText = `Dear ${facilityName},\n\nWe are following up on our workers' compensation audit. Our records indicate that your response was incomplete.\n\nReason: ${reason.trim()}\n\nPlease provide the missing information at your earliest convenience.\n\nThank you,\nEmpire Benefit Solutions`;
+  const subject = "Follow-up Required: Workers’ Compensation Audit — " + facilityName;
+  const bodyText = "Dear " + facilityName + "," + NL + NL +
+    "We are following up on our workers’ compensation audit. Our records indicate that your response was incomplete." + NL + NL +
+    "Reason: " + reason.trim() + NL + NL +
+    "Please provide the missing information at your earliest convenience." + NL + NL +
+    "Thank you," + NL + "Empire Benefit Solutions" + employeeListText;
 
   const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const htmlBody = `<html><body><pre style="font-family:Arial,sans-serif;white-space:pre-wrap">${escape(bodyText)}</pre></body></html>`;
+  const htmlBody = '<html><body><pre style="font-family:Arial,sans-serif;white-space:pre-wrap">' + escape(bodyText) + '</pre></body></html>';
 
   const simMode = await getSimulationMode();
 
   if (simMode) {
-    const toAddress = row.contactEmail ?? `sim-${row.facilityId}@simulation.local`;
-    const mockConversationId = `sim-conv-incomplete-${outreachId}-${Date.now()}`;
+    const toAddress = row.contactEmail ?? "sim-" + row.facilityId + "@simulation.local";
+    const mockConversationId = "sim-conv-incomplete-" + outreachId + "-" + Date.now();
     await db.insert(simOutbox).values({
       outreachId,
       facilityName,
@@ -329,8 +359,8 @@ export async function sendIncompleteNotice(outreachId: string, reason: string): 
     emailSent: true,
   });
 
-  revalidatePath(`/batches/${row.batchId}`);
-  revalidatePath(`/batches/${row.batchId}/facilities/${row.facilityId}`);
+  revalidatePath("/batches/" + row.batchId);
+  revalidatePath("/batches/" + row.batchId + "/facilities/" + row.facilityId);
 }
 
 export async function revertIncomplete(
