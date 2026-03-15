@@ -1,8 +1,8 @@
 export type OutreachStatus = "DRAFT" | "SENT" | "REPLIED" | "INCOMPLETE" | "DONE";
 
 const LEGAL_TRANSITIONS: Record<OutreachStatus, OutreachStatus[]> = {
-  DRAFT: ["SENT"],
-  SENT: ["REPLIED", "DONE"],
+  DRAFT: ["SENT", "INCOMPLETE"],
+  SENT: ["REPLIED", "DONE", "INCOMPLETE"],
   REPLIED: ["INCOMPLETE", "DONE"],
   INCOMPLETE: ["REPLIED", "DONE", "SENT"],
   DONE: [],
