@@ -55,7 +55,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
       facilityId: auditRecords.facilityId,
       facilityName: facilities.name,
       contactEmail: facilities.contactEmail,
-      ccEmails: facilities.ccEmails,
+      ccEmailsRaw: sql<string>`coalesce(${facilities.ccEmails}::text, '[]')`,
       recordCount: count(auditRecords.id),
       outreachId: facilityOutreaches.id,
       outreachStatus: facilityOutreaches.status,
@@ -81,7 +81,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
       auditRecords.facilityId,
       facilities.name,
       facilities.contactEmail,
-      facilities.ccEmails,
+      sql`coalesce(${facilities.ccEmails}::text, '[]')`,
       facilityOutreaches.id,
       facilityOutreaches.status,
       facilityOutreaches.snoozeUntil,
@@ -247,7 +247,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                               outreachId={fg.outreachId}
                               facilityName={fg.facilityName ?? ""}
                               facilityEmail={fg.contactEmail ?? null}
-                              savedCcEmails={(fg.ccEmails as string[]) ?? []}
+                              savedCcEmails={JSON.parse(fg.ccEmailsRaw ?? "[]") as string[]}
                               periodName={periodName}
                             />
                           )}
