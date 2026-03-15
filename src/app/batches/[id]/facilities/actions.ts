@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { auditRecords, auditPeriods, auditBatches, facilityOutreaches, employeeIdentities, facilities, simOutbox } from "@/db/schema";
+import { auditRecords, auditPeriods, auditBatches, facilityOutreaches, employeeIdentities, facilities, simOutbox, outreachEvents } from "@/db/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { sendGraphEmail } from "@/lib/graph-client";
@@ -110,6 +110,12 @@ export async function sendOutreachEmail(
       })
       .where(eq(facilityOutreaches.id, outreachId));
   }
+
+  await db.insert(outreachEvents).values({
+    outreachId,
+    eventType: "SENT",
+    emailSent: true,
+  });
 
   revalidatePath(`/batches/${row.batchId}`);
   revalidatePath("/");
@@ -260,5 +266,69 @@ export async function markFacilityIncomplete(
     })
     .where(eq(facilityOutreaches.id, outreachId));
 
+  await db.insert(outreachEvents).values({
+    outreachId,
+    eventType: "INCOMPLETE_NOTICE",
+    note: reason.trim(),
+    emailSent: false,
+  });
+
   revalidatePath(`/batches/${batchId}`);
+}
+
+export async function sendIncompleteNotice(outreachId: string, reason: string): Promise<void> {
+  if (!outreachId) throw new Error("Outreach ID is required");
+  if (!reason.trim()) throw new Error("Reason is required");
+
+  const [row] = await db
+    .select({
+      outreachId: facilityOutreaches.id,
+      batchId: facilityOutreaches.batchId,
+      facilityId: facilityOutreaches.facilityId,
+      facilityName: facilities.name,
+      contactEmail: facilities.contactEmail,
+      periodName: auditPeriods.name,
+    })
+    .from(facilityOutreaches)
+    .leftJoin(facilities, eq(facilityOutreaches.facilityId, facilities.id))
+    .leftJoin(auditBatches, eq(facilityOutreaches.batchId, auditBatches.id))
+    .leftJoin(auditPeriods, eq(auditBatches.periodId, auditPeriods.id))
+    .where(eq(facilityOutreaches.id, outreachId));
+
+  if (!row) throw new Error("Outreach not found");
+
+  const facilityName = row.facilityName ?? "Facility";
+  const subject = `Follow-up Required: Workers' Compensation Audit — ${facilityName}`;
+  const bodyText = `Dear ${facilityName},\n\nWe are following up on our workers' compensation audit. Our records indicate that your response was incomplete.\n\nReason: ${reason.trim()}\n\nPlease provide the missing information at your earliest convenience.\n\nThank you,\nEmpire Benefit Solutions`;
+
+  const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const htmlBody = `<html><body><pre style="font-family:Arial,sans-serif;white-space:pre-wrap">${escape(bodyText)}</pre></body></html>`;
+
+  const simMode = await getSimulationMode();
+
+  if (simMode) {
+    const toAddress = row.contactEmail ?? `sim-${row.facilityId}@simulation.local`;
+    const mockConversationId = `sim-conv-incomplete-${outreachId}-${Date.now()}`;
+    await db.insert(simOutbox).values({
+      outreachId,
+      facilityName,
+      toAddress,
+      subject,
+      htmlBody,
+      conversationId: mockConversationId,
+    });
+  } else {
+    if (!row.contactEmail) throw new Error("Facility has no contact email");
+    await sendGraphEmail({ to: row.contactEmail, cc: [], subject, htmlBody });
+  }
+
+  await db.insert(outreachEvents).values({
+    outreachId,
+    eventType: "INCOMPLETE_NOTICE",
+    note: reason.trim(),
+    emailSent: true,
+  });
+
+  revalidatePath(`/batches/${row.batchId}`);
+  revalidatePath(`/batches/${row.batchId}/facilities/${row.facilityId}`);
 }

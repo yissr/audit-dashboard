@@ -14,6 +14,10 @@ export const inboundEmailStatusEnum = pgEnum("inbound_email_status", [
   "PENDING", "MATCHED", "FAILED", "IGNORED"
 ]);
 
+export const outreachEventTypeEnum = pgEnum("outreach_event_type", [
+  "SENT", "REMINDER", "REPLIED", "INCOMPLETE_NOTICE", "DONE", "NOTE"
+]);
+
 export const carriers = pgTable("carriers", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
@@ -153,6 +157,15 @@ export const auditLogs = pgTable("audit_logs", {
 export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
+});
+
+export const outreachEvents = pgTable("outreach_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  outreachId: uuid("outreach_id").notNull().references(() => facilityOutreaches.id),
+  eventType: outreachEventTypeEnum("event_type").notNull(),
+  note: text("note"),
+  emailSent: boolean("email_sent").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const simOutbox = pgTable("sim_outbox", {

@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/db";
-import { auditBatches, auditRecords, auditPeriods, carriers, facilities, facilityOutreaches, employeeIdentities, simOutbox } from "@/db/schema";
+import { auditBatches, auditRecords, auditPeriods, carriers, facilities, facilityOutreaches, employeeIdentities, simOutbox, outreachEvents } from "@/db/schema";
 import { getSimulationMode } from "@/app/settings/actions";
 import { autoDetectAndParse, autoDetectAndPreview } from "@/lib/parsers/auto-detect";
 import { revalidatePath } from "next/cache";
@@ -404,6 +404,12 @@ export async function logReminder(outreachId: string): Promise<void> {
       conversationId: outreach.graphConversationId ?? `sim-conv-${outreachId}`,
     });
   }
+
+  await db.insert(outreachEvents).values({
+    outreachId,
+    eventType: "REMINDER",
+    emailSent: simMode,
+  });
 
   revalidatePath(`/batches/${outreach.batchId}`);
   revalidatePath("/sim-inbox");

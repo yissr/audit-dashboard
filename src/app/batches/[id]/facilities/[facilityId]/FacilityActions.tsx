@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { markFacilityDone, markFacilityIncomplete } from "../actions";
+import { markFacilityDone, markFacilityIncomplete, sendIncompleteNotice } from "../actions";
 import { Button } from "@/components/ui/button";
 
 interface Props {
@@ -19,6 +19,10 @@ export default function FacilityActions({ outreachId, batchId, currentStatus, cl
   const [showIncomplete, setShowIncomplete] = useState(false);
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
+
+  // After incomplete is marked: null = not yet shown, "pending" = show email prompt, "sent" = email sent, "skipped" = not now
+  const [emailStep, setEmailStep] = useState<null | "pending" | "sent" | "skipped">(null);
+  const [pendingReason, setPendingReason] = useState("");
 
   if (currentStatus === "DONE") {
     return (
@@ -49,10 +53,24 @@ export default function FacilityActions({ outreachId, batchId, currentStatus, cl
     startTransition(async () => {
       try {
         await markFacilityIncomplete(outreachId, batchId, reason);
+        setPendingReason(reason.trim());
         setShowIncomplete(false);
+        setEmailStep("pending");
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to mark incomplete");
+      }
+    });
+  }
+
+  function handleSendEmail() {
+    setError("");
+    startTransition(async () => {
+      try {
+        await sendIncompleteNotice(outreachId, pendingReason);
+        setEmailStep("sent");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to send email");
       }
     });
   }
@@ -69,7 +87,7 @@ export default function FacilityActions({ outreachId, batchId, currentStatus, cl
         </Button>
         <Button
           variant="outline"
-          onClick={() => { setShowIncomplete(!showIncomplete); setError(""); }}
+          onClick={() => { setShowIncomplete(!showIncomplete); setError(""); setEmailStep(null); }}
           disabled={isPending}
           className="text-sm border-red-300 text-red-600 hover:bg-red-50"
         >
@@ -96,6 +114,47 @@ export default function FacilityActions({ outreachId, batchId, currentStatus, cl
               Cancel
             </Button>
           </div>
+        </div>
+      )}
+
+      {emailStep === "pending" && (
+        <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md space-y-2">
+          <p className="text-sm text-yellow-800 font-medium">Marked incomplete. Send notification email to facility now?</p>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleSendEmail}
+              disabled={isPending}
+              className="text-sm bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Send Email Now
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setEmailStep("skipped")}
+              disabled={isPending}
+              className="text-sm"
+            >
+              Not Now
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {emailStep === "sent" && (
+        <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-200 rounded-md text-sm text-green-700 font-medium">
+          <span>&#10003;</span> Email sent
+        </div>
+      )}
+
+      {emailStep === "skipped" && (
+        <div className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-md text-sm text-yellow-700">
+          <span>&#9888;</span> Email not sent yet
+          <button
+            onClick={() => setEmailStep("pending")}
+            className="underline text-blue-600 hover:text-blue-800 ml-1"
+          >
+            Send now
+          </button>
         </div>
       )}
     </div>

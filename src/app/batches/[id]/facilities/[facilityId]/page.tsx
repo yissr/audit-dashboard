@@ -1,8 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { db } from "@/db";
-import { auditBatches, auditRecords, auditPeriods, carriers, facilities, facilityOutreaches, employeeIdentities } from "@/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { auditBatches, auditRecords, auditPeriods, carriers, facilities, facilityOutreaches, employeeIdentities, outreachEvents } from "@/db/schema";
+import { eq, and, inArray, asc } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
@@ -63,6 +63,43 @@ export default async function ClassificationPage({
     .select()
     .from(facilityOutreaches)
     .where(and(eq(facilityOutreaches.batchId, batchId), eq(facilityOutreaches.facilityId, facilityId)));
+
+  // Load comms events
+  const commsEvents = outreach
+    ? await db
+        .select()
+        .from(outreachEvents)
+        .where(eq(outreachEvents.outreachId, outreach.id))
+        .orderBy(asc(outreachEvents.createdAt))
+    : [];
+
+  // Synthetic REPLIED event from outreach fields if no REPLIED event logged
+  const hasRepliedEvent = commsEvents.some((e) => e.eventType === "REPLIED");
+  const syntheticEvents: Array<{
+    id: string;
+    eventType: string;
+    note: string | null;
+    emailSent: boolean | null;
+    createdAt: Date | null;
+  }> = [];
+  if (!hasRepliedEvent && outreach?.repliedAt) {
+    syntheticEvents.push({
+      id: "synthetic-replied",
+      eventType: "REPLIED",
+      note: outreach.replyRaw ?? null,
+      emailSent: false,
+      createdAt: outreach.repliedAt,
+    });
+  }
+
+  const allCommsEvents = [
+    ...commsEvents,
+    ...syntheticEvents,
+  ].sort((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return aTime - bTime;
+  });
 
   const records = await db
     .select()
@@ -142,6 +179,67 @@ export default async function ClassificationPage({
           )}
         </div>
       </div>
+
+      {/* Communications timeline */}
+      {allCommsEvents.length > 0 && (
+        <details className="border border-gray-200 rounded-md">
+          <summary className="px-4 py-2 text-sm font-medium text-gray-700 cursor-pointer select-none hover:bg-gray-50">
+            Communications ({allCommsEvents.length} event{allCommsEvents.length !== 1 ? "s" : ""})
+          </summary>
+          <div className="px-4 pb-4 pt-2">
+            <div className="relative pl-5">
+              {/* Vertical line */}
+              <div className="absolute left-1.5 top-0 bottom-0 w-px bg-gray-200" />
+              <div className="space-y-4">
+                {allCommsEvents.map((evt) => {
+                  const dotColor =
+                    evt.eventType === "SENT" || evt.eventType === "DONE"
+                      ? "bg-green-500"
+                      : evt.eventType === "REMINDER"
+                      ? "bg-blue-500"
+                      : evt.eventType === "INCOMPLETE_NOTICE"
+                      ? "bg-red-500"
+                      : evt.eventType === "REPLIED"
+                      ? "bg-purple-500"
+                      : "bg-gray-400";
+
+                  const label =
+                    evt.eventType === "SENT" ? "Email Sent"
+                    : evt.eventType === "REMINDER" ? "Reminder Sent"
+                    : evt.eventType === "REPLIED" ? "Reply Received"
+                    : evt.eventType === "INCOMPLETE_NOTICE" ? "Marked Incomplete"
+                    : evt.eventType === "DONE" ? "Marked Done"
+                    : "Note";
+
+                  return (
+                    <div key={evt.id} className="relative flex items-start gap-3">
+                      <span className={`absolute -left-3.5 mt-1 w-3 h-3 rounded-full border-2 border-white ${dotColor}`} />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium text-gray-800">{label}</span>
+                          {evt.emailSent && (
+                            <span className="text-xs px-1.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-600 rounded">
+                              email sent
+                            </span>
+                          )}
+                          {evt.createdAt && (
+                            <span className="text-xs text-gray-400">
+                              {new Date(evt.createdAt).toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                        {evt.note && (
+                          <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-wrap">{evt.note}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </details>
+      )}
 
       {/* Split layout: email panel + employee list — independent scroll */}
       <div className="flex gap-4 items-start" style={{ height: "calc(100vh - 180px)" }}>
