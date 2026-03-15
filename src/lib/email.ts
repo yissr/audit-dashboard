@@ -1,5 +1,3 @@
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { sendGraphEmail, isGraphConfigured } from "./graph-client";
 
 interface EmailOptions {
@@ -10,7 +8,7 @@ interface EmailOptions {
   csvAttachment: { filename: string; content: string };
 }
 
-export async function sendEmail(options: EmailOptions): Promise<{ dryRun: boolean; filePath?: string }> {
+export async function sendEmail(options: EmailOptions): Promise<{ dryRun: boolean }> {
   if (isGraphConfigured()) {
     await sendGraphEmail({
       to: options.to,
@@ -28,12 +26,7 @@ export async function sendEmail(options: EmailOptions): Promise<{ dryRun: boolea
     return { dryRun: false };
   }
 
-  // Dry-run: write files locally
-  const outDir = join(process.cwd(), "test-data");
-  mkdirSync(outDir, { recursive: true });
-  const htmlPath = join(outDir, "submission-email-output.html");
-  const csvPath = join(outDir, "submission-email-output.csv");
-  writeFileSync(htmlPath, options.html, "utf-8");
-  writeFileSync(csvPath, options.csvAttachment.content, "utf-8");
-  return { dryRun: true, filePath: htmlPath };
+  // Dry-run: log to console only (filesystem is read-only on Vercel)
+  console.log("[email dry-run] Subject:", options.subject, "To:", options.to);
+  return { dryRun: true };
 }

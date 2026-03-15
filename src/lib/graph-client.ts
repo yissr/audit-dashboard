@@ -1,5 +1,3 @@
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
@@ -53,12 +51,8 @@ export async function sendGraphEmail(options: {
   attachments?: Array<{ name: string; contentType: string; contentBytes: string }>;
 }): Promise<{ messageId: string; conversationId: string }> {
   if (!isGraphConfigured()) {
-    // Dry-run: write to test-data/
-    const outDir = join(process.cwd(), "test-data");
-    mkdirSync(outDir, { recursive: true });
-    const filePath = join(outDir, `outreach-email-${Date.now()}.html`);
-    writeFileSync(filePath, options.htmlBody, "utf-8");
-    console.log(`[graph-client dry-run] Email to ${options.to} written to ${filePath}`);
+    // Dry-run: log only (no filesystem writes — read-only on Vercel)
+    console.log(`[graph-client dry-run] Email to ${options.to} subject: ${options.subject}`);
     return {
       messageId: `dry-run-msg-${Date.now()}`,
       conversationId: `dry-run-conv-${Date.now()}`,
