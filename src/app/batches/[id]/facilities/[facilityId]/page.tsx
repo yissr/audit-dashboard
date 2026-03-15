@@ -143,10 +143,10 @@ export default async function ClassificationPage({
         </div>
       </div>
 
-      {/* Split layout: email panel + employee list */}
-      <div className="flex gap-6 items-start">
+      {/* Split layout: email panel + employee list — independent scroll */}
+      <div className="flex gap-4 items-start" style={{ height: "calc(100vh - 180px)" }}>
         {emailHtml && <EmailPanel htmlBody={emailHtml} />}
-        <div className="flex-1 min-w-0 space-y-4">
+        <div className="flex-1 min-w-0 overflow-y-auto h-full pr-1 space-y-3">
         {/* Filter bar */}
         <div className="flex items-center gap-2 text-sm">
           <Link
