@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { db } from "@/db";
 import { auditBatches, auditPeriods, auditRecords, carriers, facilityOutreaches, facilities } from "@/db/schema";
-import { eq, inArray, sql, and, gte, lte } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 
@@ -73,22 +73,19 @@ export default async function DashboardPage() {
     batchesByPeriod.get(batch.periodId)!.push(batch);
   }
 
-  // Summary stats — current-month audit progress
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  // Summary stats — all active (non-submitted) batches visible on dashboard
+  const activeBatchIds = batchRows.map((b) => b.id);
 
-  // Query outreach stats directly from DB filtered by current month receivedAt
-  // (independent of period filter so all batches are included)
-  const outreachStats = await db
-    .select({
-      status: facilityOutreaches.status,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(facilityOutreaches)
-    .innerJoin(auditBatches, eq(facilityOutreaches.batchId, auditBatches.id))
-    .where(and(gte(auditBatches.receivedAt, monthStart), lte(auditBatches.receivedAt, monthEnd)))
-    .groupBy(facilityOutreaches.status);
+  const outreachStats = activeBatchIds.length > 0
+    ? await db
+        .select({
+          status: facilityOutreaches.status,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(facilityOutreaches)
+        .where(inArray(facilityOutreaches.batchId, activeBatchIds))
+        .groupBy(facilityOutreaches.status)
+    : [];
 
   let statReplied = 0;
   let statIncomplete = 0;
@@ -191,7 +188,7 @@ export default async function DashboardPage() {
           <p className="text-2xl font-bold text-[#1B2A4A] mt-1">{statIncomplete}</p>
         </div>
         <div className="rounded-lg border bg-white px-4 py-3">
-          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Done This Month</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Facilities Done</p>
           <p className="text-2xl font-bold text-[#1B2A4A] mt-1">
             {statDone} / {statTotal} ({statDonePct}%)
           </p>
