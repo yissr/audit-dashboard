@@ -78,31 +78,28 @@ export default async function DashboardPage() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-  const currentMonthBatchIds = batchRows
-    .filter((b) => b.receivedAt && new Date(b.receivedAt) >= monthStart && new Date(b.receivedAt) <= monthEnd)
-    .map((b) => b.id);
+  // Query outreach stats directly from DB filtered by current month receivedAt
+  // (independent of period filter so all batches are included)
+  const outreachStats = await db
+    .select({
+      status: facilityOutreaches.status,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(facilityOutreaches)
+    .innerJoin(auditBatches, eq(facilityOutreaches.batchId, auditBatches.id))
+    .where(and(gte(auditBatches.receivedAt, monthStart), lte(auditBatches.receivedAt, monthEnd)))
+    .groupBy(facilityOutreaches.status);
 
   let statReplied = 0;
   let statIncomplete = 0;
   let statDone = 0;
   let statTotal = 0;
 
-  if (currentMonthBatchIds.length > 0) {
-    const outreachStats = await db
-      .select({
-        status: facilityOutreaches.status,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(facilityOutreaches)
-      .where(inArray(facilityOutreaches.batchId, currentMonthBatchIds))
-      .groupBy(facilityOutreaches.status);
-
-    for (const row of outreachStats) {
-      statTotal += row.count;
-      if (row.status === "REPLIED" || row.status === "DONE") statReplied += row.count;
-      if (row.status === "INCOMPLETE") statIncomplete += row.count;
-      if (row.status === "DONE") statDone += row.count;
-    }
+  for (const row of outreachStats) {
+    statTotal += row.count;
+    if (row.status === "REPLIED" || row.status === "DONE") statReplied += row.count;
+    if (row.status === "INCOMPLETE") statIncomplete += row.count;
+    if (row.status === "DONE") statDone += row.count;
   }
 
   const statDonePct = statTotal > 0 ? Math.round((statDone / statTotal) * 100) : 0;

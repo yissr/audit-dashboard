@@ -8,6 +8,8 @@ import Link from "next/link";
 import { listFacilities } from "@/app/facilities/actions";
 import FacilitySearch from "@/app/facilities/FacilitySearch";
 import ConfigTabs from "./ConfigTabs";
+import ReminderSettings from "./ReminderSettings";
+import { getReminderSettings } from "@/app/settings/actions";
 
 function formatDate(d: Date | null) {
   if (!d) return "—";
@@ -28,6 +30,7 @@ export default async function ConfigurationPage({
       {tab === "facilities" && <FacilitiesTab />}
       {tab === "carriers" && <CarriersTab />}
       {tab === "periods" && <PeriodsTab />}
+      {tab === "reminders" && <RemindersTab />}
     </div>
   );
 }
@@ -178,6 +181,20 @@ async function PeriodsTab() {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+async function RemindersTab() {
+  const settings = await getReminderSettings();
+  return (
+    <div className="space-y-4">
+      <h2 className="text-base font-semibold text-[#1B2A4A]">Automated Reminder Settings</h2>
+      <ReminderSettings
+        firstReminderDays={settings.firstReminderDays}
+        betweenRemindersDays={settings.betweenRemindersDays}
+        maxReminders={settings.maxReminders}
+      />
     </div>
   );
 }

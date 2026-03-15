@@ -6,6 +6,7 @@ const tabs = [
   { id: "facilities", label: "Facilities" },
   { id: "carriers", label: "Carriers" },
   { id: "periods", label: "Periods" },
+  { id: "reminders", label: "Reminders" },
 ];
 
 export default function ConfigTabs({ activeTab }: { activeTab: string }) {

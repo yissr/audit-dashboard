@@ -9,13 +9,10 @@ import {
   auditBatches,
 } from "@/db/schema";
 import { eq, and, or, isNull, lte, isNotNull, inArray, sql } from "drizzle-orm";
-import { getSimulationMode } from "@/app/settings/actions";
+import { getSimulationMode, getReminderSettings } from "@/app/settings/actions";
 import { sendGraphEmail } from "@/lib/graph-client";
 
-// ─── Reminder timing constants ────────────────────────────────────────────────
-const FIRST_REMINDER_DAYS = 7;
-const BETWEEN_REMINDERS_DAYS = 7;
-const MAX_REMINDERS = 3;
+// Reminder timing is loaded from DB settings (configurable under /configuration)
 
 function subDays(days: number): Date {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -27,6 +24,8 @@ export async function GET(request: Request) {
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const { firstReminderDays: FIRST_REMINDER_DAYS, betweenRemindersDays: BETWEEN_REMINDERS_DAYS, maxReminders: MAX_REMINDERS } = await getReminderSettings();
 
   const now = new Date();
   const firstReminderCutoff = subDays(FIRST_REMINDER_DAYS);
