@@ -18,24 +18,20 @@ export default async function DashboardPage() {
   // 3. Collect all period IDs to fetch batches for
   const allPeriodIds = allPeriods.map((p) => p.id);
 
-  // 4. Fetch all batches (for monthly and quarterly periods) with carrier info
-  const batchRows =
-    allPeriodIds.length > 0
-      ? await db
-          .select({
-            id: auditBatches.id,
-            periodId: auditBatches.periodId,
-            carrierId: auditBatches.carrierId,
-            status: auditBatches.status,
-            sourceFile: auditBatches.sourceFile,
-            receivedAt: auditBatches.receivedAt,
-            carrierName: carriers.name,
-            carrierLogoUrl: carriers.logoUrl,
-          })
-          .from(auditBatches)
-          .leftJoin(carriers, eq(auditBatches.carrierId, carriers.id))
-          .where(inArray(auditBatches.periodId, allPeriodIds))
-      : [];
+  // 4. Fetch ALL batches (period-linked and non-period) with carrier info
+  const batchRows = await db
+    .select({
+      id: auditBatches.id,
+      periodId: auditBatches.periodId,
+      carrierId: auditBatches.carrierId,
+      status: auditBatches.status,
+      sourceFile: auditBatches.sourceFile,
+      receivedAt: auditBatches.receivedAt,
+      carrierName: carriers.name,
+      carrierLogoUrl: carriers.logoUrl,
+    })
+    .from(auditBatches)
+    .leftJoin(carriers, eq(auditBatches.carrierId, carriers.id));
 
   // 5. Count audit records per batch
   const recordCountRows =
