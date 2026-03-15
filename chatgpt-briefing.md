@@ -121,3 +121,12 @@ Workers' Compensation Audit Dashboard built with Next.js 16, Drizzle ORM, Neon P
 **Key decisions:** NavLinks.tsx is "use client" using usePathname for active highlighting. Dashboard adds 3 summary stat cards and progress mini-bars per batch. Section border color driven by whether batches are all/some/none SUBMITTED. FacilitySearch is a client component for instant filter without a server round-trip. Carriers switched to table layout with rep count via LEFT JOIN + groupBy. Periods switched to table with linked period name + batch count. Classification page gets breadcrumb + sticky header + All/Unclassified/Removed filter bar + corrected green border logic (green = has any classification).
 **Issues encountered:** None — tsc --noEmit clean on first try.
 **Open items:** Batch rows on dashboard are not fully clickable as `<tr>` (only the carrier name link is clickable) — making entire row a link requires JS or wrapper workaround; left as-is for now.
+
+### Run: /build — 2026-03-14
+**Task:** Email Simulation Mode — toggle, sim outbox, sim inbox with reply
+**Outcome:** APPROVED
+**Iterations:** 1
+**Files created/modified:** src/db/schema.ts (added settings + simOutbox tables), src/app/settings/actions.ts (new), src/app/SimulationToggle.tsx (new), src/app/layout.tsx, src/app/NavLinks.tsx, src/app/sim-inbox/page.tsx (new), src/app/sim-inbox/SimReplyForm.tsx (new), src/app/sim-inbox/actions.ts (new), src/app/batches/[id]/facilities/actions.ts, src/app/batches/[id]/SendOutreachButton.tsx, src/app/batches/[id]/page.tsx
+**Key decisions:** settings table stores sim toggle as key/value; simOutbox table stores simulated sent emails; sim reply path inserts into inboundEmails + updates outreach to REPLIED inline (same logic as webhook); SimulationToggle is amber pill in nav right side; Sim Inbox nav link only shown when sim enabled (prop from layout server component); SendOutreachButton relaxes email requirement when simMode=true.
+**Issues encountered:** Schema push fails (WebSocket/ECONNREFUSED in this environment) — noted as expected, tsc is the real gate. tsc --noEmit exited 0 on first try.
+**Open items:** DB schema push must be run manually in an environment with live DB access. Sim mode toggle requires a page reload (revalidatePath) to update the nav link visibility.
