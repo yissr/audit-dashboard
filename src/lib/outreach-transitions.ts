@@ -4,7 +4,7 @@ const LEGAL_TRANSITIONS: Record<OutreachStatus, OutreachStatus[]> = {
   DRAFT: ["SENT"],
   SENT: ["REPLIED", "DONE"],
   REPLIED: ["INCOMPLETE", "DONE"],
-  INCOMPLETE: ["REPLIED", "DONE"],
+  INCOMPLETE: ["REPLIED", "DONE", "SENT"],
   DONE: [],
 };
 

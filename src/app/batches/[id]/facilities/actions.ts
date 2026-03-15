@@ -332,3 +332,33 @@ export async function sendIncompleteNotice(outreachId: string, reason: string): 
   revalidatePath(`/batches/${row.batchId}`);
   revalidatePath(`/batches/${row.batchId}/facilities/${row.facilityId}`);
 }
+
+export async function revertIncomplete(
+  outreachId: string,
+  batchId: string
+): Promise<void> {
+  if (!outreachId) throw new Error("Outreach ID is required");
+
+  const [outreach] = await db
+    .select({ status: facilityOutreaches.status, facilityId: facilityOutreaches.facilityId })
+    .from(facilityOutreaches)
+    .where(eq(facilityOutreaches.id, outreachId));
+
+  if (!outreach) throw new Error("Outreach not found");
+  if (outreach.status !== "INCOMPLETE") throw new Error("Can only revert INCOMPLETE outreaches");
+
+  await db
+    .update(facilityOutreaches)
+    .set({ status: "SENT", incompleteReason: null })
+    .where(eq(facilityOutreaches.id, outreachId));
+
+  await db.insert(outreachEvents).values({
+    outreachId,
+    eventType: "NOTE",
+    note: "Incomplete designation reversed",
+    emailSent: false,
+  });
+
+  revalidatePath(`/batches/${batchId}/facilities/${outreach.facilityId}`);
+  revalidatePath(`/batches/${batchId}`);
+}

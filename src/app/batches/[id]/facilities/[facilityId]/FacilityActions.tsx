@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { markFacilityDone, markFacilityIncomplete, sendIncompleteNotice } from "../actions";
+import { markFacilityDone, markFacilityIncomplete, sendIncompleteNotice, revertIncomplete } from "../actions";
 import { Button } from "@/components/ui/button";
 
 interface Props {
@@ -28,6 +28,54 @@ export default function FacilityActions({ outreachId, batchId, currentStatus, cl
     return (
       <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-md px-4 py-2 text-sm text-green-700">
         Facility marked as Done
+      </div>
+    );
+  }
+
+  if (currentStatus === "INCOMPLETE") {
+    return (
+      <div className="space-y-2">
+        {emailStep === "pending" && (
+          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md space-y-2">
+            <p className="text-sm text-yellow-800 font-medium">Send notification email to facility?</p>
+            <div className="flex gap-2">
+              <Button onClick={handleSendEmail} disabled={isPending} className="text-sm bg-blue-600 hover:bg-blue-700 text-white">
+                Send Email Now
+              </Button>
+              <Button variant="outline" onClick={() => setEmailStep("skipped")} disabled={isPending} className="text-sm">
+                Not Now
+              </Button>
+            </div>
+          </div>
+        )}
+        {emailStep === "sent" && (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-200 rounded-md text-sm text-green-700 font-medium">
+            <span>&#10003;</span> Email sent
+          </div>
+        )}
+        {emailStep === "skipped" && (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-md text-sm text-yellow-700">
+            <span>&#9888;</span> Email not sent
+            <button onClick={() => setEmailStep("pending")} className="underline text-blue-600 hover:text-blue-800 ml-1">Send now</button>
+          </div>
+        )}
+        <div className="flex gap-2 flex-wrap items-center">
+          <span className="px-3 py-1.5 bg-red-50 border border-red-200 rounded-md text-sm text-red-700 font-medium">⚠ Marked Incomplete</span>
+          <Button
+            variant="outline"
+            onClick={() => {
+              startTransition(async () => {
+                try { await revertIncomplete(outreachId, batchId); router.refresh(); }
+                catch (e) { setError(e instanceof Error ? e.message : "Failed to revert"); }
+              });
+            }}
+            disabled={isPending}
+            className="text-sm border-gray-300 text-gray-600 hover:bg-gray-50"
+          >
+            Undo Incomplete
+          </Button>
+        </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
       </div>
     );
   }
