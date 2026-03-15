@@ -1,7 +1,7 @@
 "use server";
 import { db } from "@/db";
 import { carrierReps, auditBatches } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export async function listReps(carrierId: string) {
@@ -17,6 +17,14 @@ export async function addRep(formData: FormData): Promise<void> {
   if (!name) throw new Error("Rep name is required");
   await db.insert(carrierReps).values({ carrierId, name, email, phone });
   revalidatePath(`/carriers/${carrierId}`);
+}
+
+export async function getRepBatchCount(repId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(auditBatches)
+    .where(eq(auditBatches.repId, repId));
+  return row?.count ?? 0;
 }
 
 export async function deleteRep(repId: string, carrierId: string): Promise<void> {

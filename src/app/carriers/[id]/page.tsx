@@ -3,7 +3,8 @@ import { db } from "@/db";
 import { carriers } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
-import { listReps, addRep, deleteRep } from "./reps/actions";
+import { listReps, addRep } from "./reps/actions";
+import DeleteRepButton from "./DeleteRepButton";
 import Link from "next/link";
 import CarrierLogoUpload from "./CarrierLogoUpload";
 import DeleteCarrierButton from "./DeleteCarrierButton";
@@ -56,16 +57,13 @@ export default async function CarrierDetailPage({ params }: { params: Promise<{ 
             </thead>
             <tbody>
               {reps.map((rep) => {
-                const boundDelete = deleteRep.bind(null, rep.id, id);
                 return (
                 <tr key={rep.id} className="border-t">
                   <td className="px-3 py-2">{rep.name}</td>
                   <td className="px-3 py-2 text-gray-500">{rep.email ?? "—"}</td>
                   <td className="px-3 py-2 text-gray-500">{rep.phone ?? "—"}</td>
                   <td className="px-3 py-2">
-                    <form action={boundDelete}>
-                      <button type="submit" className="text-xs text-red-500 hover:underline">Remove</button>
-                    </form>
+                    <DeleteRepButton repId={rep.id} repName={rep.name} carrierId={id} />
                   </td>
                 </tr>
                 );
