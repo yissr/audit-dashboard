@@ -112,3 +112,12 @@ Workers' Compensation Audit Dashboard built with Next.js 16, Drizzle ORM, Neon P
 **Key decisions:** Self-referential linkedPeriodId FK on audit_periods. createPeriod auto-creates counterpart period and links bidirectionally. findOrCreateIdentity merges both period caches before matching. New identities always created under current batch's periodId.
 **Issues encountered:** None — single iteration, all 11 tests passed, tsc clean.
 **Open items:** Reviewer recommendations (non-blocking): wrap bidirectional link updates in transaction; unique constraint on period name; onDelete("set null") on linkedPeriodId FK; trim-normalize SSN/policyNumber before matching.
+
+### Run: /build — 2026-03-14
+**Task:** UX/layout polish across all pages — no new features
+**Outcome:** APPROVED
+**Iterations:** 1
+**Files created/modified:** src/app/NavLinks.tsx (new), src/app/layout.tsx, src/app/page.tsx, src/app/batches/[id]/page.tsx, src/app/batches/[id]/facilities/[facilityId]/page.tsx, src/app/facilities/page.tsx, src/app/facilities/FacilitySearch.tsx (new), src/app/carriers/page.tsx, src/app/periods/page.tsx
+**Key decisions:** NavLinks.tsx is "use client" using usePathname for active highlighting. Dashboard adds 3 summary stat cards and progress mini-bars per batch. Section border color driven by whether batches are all/some/none SUBMITTED. FacilitySearch is a client component for instant filter without a server round-trip. Carriers switched to table layout with rep count via LEFT JOIN + groupBy. Periods switched to table with linked period name + batch count. Classification page gets breadcrumb + sticky header + All/Unclassified/Removed filter bar + corrected green border logic (green = has any classification).
+**Issues encountered:** None — tsc --noEmit clean on first try.
+**Open items:** Batch rows on dashboard are not fully clickable as `<tr>` (only the carrier name link is clickable) — making entire row a link requires JS or wrapper workaround; left as-is for now.
