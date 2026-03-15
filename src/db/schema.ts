@@ -166,5 +166,6 @@ export const simOutbox = pgTable("sim_outbox", {
   htmlBody: text("html_body").notNull(),
   conversationId: text("conversation_id").notNull(),
   repliedAt: timestamp("replied_at"),
+  replyReadAt: timestamp("reply_read_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });

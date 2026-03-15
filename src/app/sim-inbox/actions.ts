@@ -71,3 +71,12 @@ export async function submitSimReply(simOutboxId: string, replyText: string): Pr
   revalidatePath("/sim-inbox");
   revalidatePath("/");
 }
+
+export async function markReplyRead(simOutboxId: string): Promise<void> {
+  await db
+    .update(simOutbox)
+    .set({ replyReadAt: new Date() })
+    .where(eq(simOutbox.id, simOutboxId));
+
+  revalidatePath("/sim-inbox");
+}
