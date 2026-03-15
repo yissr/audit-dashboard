@@ -40,6 +40,7 @@ export default async function ClassificationPage({
   const { id: batchId, facilityId } = await params;
   const { show } = await searchParams;
   const showRemoved = show === "removed";
+  const showUnclassified = show === "unclassified";
 
   const [batch] = await db
     .select({
@@ -99,40 +100,67 @@ export default async function ClassificationPage({
     ? Array.from(identityMap.values()).filter((i) => i.classification !== null).length
     : records.filter((r) => r.classification !== null).length;
 
+  const totalCount = batch.periodId ? identityMap.size : records.length;
+
   return (
     <div className="space-y-6">
-      <div>
-        <Link href={`/batches/${batchId}`} className="text-sm text-blue-600 hover:underline">
-          ← {batch.carrierName} · {batch.sourceFile}
-        </Link>
-        <h1 className="text-2xl font-bold text-[#1B2A4A] mt-1">{facility.name}</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {classifiedCount} / {batch.periodId ? identityMap.size : records.length} employees classified
-          {outreach && <span className="ml-3">· Status: <span className="font-medium">{outreach.status}</span></span>}
-        </p>
-        {outreach?.incompleteReason && (
-          <div className="mt-2 text-sm text-red-600 bg-red-50 rounded-md px-3 py-2 inline-block">
-            Incomplete reason: {outreach.incompleteReason}
-          </div>
-        )}
+      {/* Breadcrumb */}
+      <div className="text-sm text-gray-500 flex items-center gap-1 flex-wrap">
+        <Link href="/" className="hover:underline text-blue-600">Dashboard</Link>
+        <span>→</span>
+        <Link href={`/batches/${batchId}`} className="hover:underline text-blue-600">{batch.carrierName}</Link>
+        <span>→</span>
+        <span className="text-gray-700 font-medium">{facility.name}</span>
       </div>
 
-      {showRemoved && (
-        <div className="flex items-center gap-2 rounded-md bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
-          <span>Showing removed employees only</span>
-          <Link href={`/batches/${batchId}/facilities/${facilityId}`} className="ml-2 underline text-red-600 hover:text-red-800">View all</Link>
+      {/* Sticky header */}
+      <div className="sticky top-0 bg-white z-10 border-b pb-4 -mx-4 px-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-[#1B2A4A]">{facility.name}</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              {classifiedCount} / {totalCount} employees classified
+              {outreach && <span className="ml-3">· Status: <span className="font-medium">{outreach.status}</span></span>}
+            </p>
+            {outreach?.incompleteReason && (
+              <div className="mt-2 text-sm text-red-600 bg-red-50 rounded-md px-3 py-2 inline-block">
+                Incomplete reason: {outreach.incompleteReason}
+              </div>
+            )}
+          </div>
+          {outreach && (
+            <FacilityActions
+              outreachId={outreach.id}
+              batchId={batchId}
+              currentStatus={outreach.status ?? "DRAFT"}
+              classifiedCount={classifiedCount}
+              totalCount={totalCount}
+            />
+          )}
         </div>
-      )}
+      </div>
 
-      {outreach && (
-        <FacilityActions
-          outreachId={outreach.id}
-          batchId={batchId}
-          currentStatus={outreach.status ?? "DRAFT"}
-          classifiedCount={classifiedCount}
-          totalCount={batch.periodId ? identityMap.size : records.length}
-        />
-      )}
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 text-sm">
+        <Link
+          href={`/batches/${batchId}/facilities/${facilityId}`}
+          className={`px-3 py-1.5 rounded-md transition-colors ${!show ? "bg-[#1B2A4A] text-white font-medium" : "text-gray-600 hover:bg-gray-100"}`}
+        >
+          All
+        </Link>
+        <Link
+          href={`/batches/${batchId}/facilities/${facilityId}?show=unclassified`}
+          className={`px-3 py-1.5 rounded-md transition-colors ${show === "unclassified" ? "bg-[#1B2A4A] text-white font-medium" : "text-gray-600 hover:bg-gray-100"}`}
+        >
+          Unclassified
+        </Link>
+        <Link
+          href={`/batches/${batchId}/facilities/${facilityId}?show=removed`}
+          className={`px-3 py-1.5 rounded-md transition-colors ${show === "removed" ? "bg-[#1B2A4A] text-white font-medium" : "text-gray-600 hover:bg-gray-100"}`}
+        >
+          Removed
+        </Link>
+      </div>
 
       {batch.periodId ? (
         // Period-aware view: show identities
@@ -141,10 +169,14 @@ export default async function ClassificationPage({
             <Card><CardContent className="pt-6 text-center text-gray-400">No employee identities in this facility for this period.</CardContent></Card>
           ) : (
             Array.from(identityMap.values())
-              .filter((i) => !showRemoved || (i.classification !== null && i.classification !== "STILL_EMPLOYED"))
+              .filter((i) => {
+                if (showRemoved) return i.classification !== null && i.classification !== "STILL_EMPLOYED";
+                if (showUnclassified) return i.classification === null;
+                return true;
+              })
               .sort((a, b) => a.canonicalName.localeCompare(b.canonicalName))
               .map((identity) => (
-                <Card key={identity.id} className={identity.classification && identity.classification !== "STILL_EMPLOYED" ? "border-l-4 border-l-green-400" : ""}>
+                <Card key={identity.id} className={identity.classification !== null ? "border-l-4 border-l-green-400" : ""}>
                   <CardContent className="pt-4 pb-4">
                     <div className="flex items-start justify-between gap-4 flex-wrap">
                       <div className="min-w-0">
@@ -191,9 +223,13 @@ export default async function ClassificationPage({
             <Card><CardContent className="pt-6 text-center text-gray-400">No employees in this facility.</CardContent></Card>
           ) : (
             records
-              .filter((r) => !showRemoved || (r.classification !== null && r.classification !== "STILL_EMPLOYED"))
+              .filter((r) => {
+                if (showRemoved) return r.classification !== null && r.classification !== "STILL_EMPLOYED";
+                if (showUnclassified) return r.classification === null;
+                return true;
+              })
               .map((record) => (
-              <Card key={record.id} className={record.classification ? "border-l-4 border-l-green-400" : ""}>
+              <Card key={record.id} className={record.classification !== null ? "border-l-4 border-l-green-400" : ""}>
                 <CardContent className="pt-4 pb-4">
                   <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="min-w-0">

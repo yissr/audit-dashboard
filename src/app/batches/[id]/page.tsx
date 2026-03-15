@@ -20,6 +20,13 @@ const statusColors: Record<string, string> = {
   DONE: "bg-green-100 text-green-700",
 };
 
+const batchStatusColors: Record<string, string> = {
+  DRAFT: "bg-gray-100 text-gray-700",
+  IN_PROGRESS: "bg-blue-100 text-blue-700",
+  SUBMITTED: "bg-green-100 text-green-700",
+  CLOSED: "bg-gray-200 text-gray-500",
+};
+
 export default async function BatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -124,39 +131,53 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
   const outreachedCount = facilityGroups.filter((fg) => fg.sentAt != null || (fg.outreachStatus && fg.outreachStatus !== "DRAFT")).length;
   const repliedCount = facilityGroups.filter((fg) => fg.outreachStatus === "REPLIED" || fg.outreachStatus === "DONE" || fg.outreachStatus === "INCOMPLETE").length;
   const classifiedCount = doneCount;
+  const batchStatus = batch.status ?? "DRAFT";
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#1B2A4A]">Batch Detail</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {batch.carrierName} · {batch.sourceFile} · {batch.receivedAt ? new Date(batch.receivedAt).toLocaleDateString() : ""}
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-2xl font-bold text-[#1B2A4A]">Batch Detail</h1>
+          <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold ${batchStatusColors[batchStatus] ?? "bg-gray-100 text-gray-700"}`}>
+            {batchStatus}
+          </span>
+        </div>
+        <p className="text-sm text-gray-500 mt-1 flex items-center gap-2 flex-wrap">
+          <span className="font-medium text-gray-700">{batch.carrierName}</span>
+          {periodName && (
+            <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs font-medium">{periodName}</span>
+          )}
+          <span className="text-gray-400">·</span>
+          <span>{batch.sourceFile}</span>
+          <span className="text-gray-400">·</span>
+          <span>{batch.receivedAt ? new Date(batch.receivedAt).toLocaleDateString() : ""}</span>
         </p>
       </div>
 
       <Card>
         <CardContent className="pt-6">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">Facilities Progress</span>
-            <span className="text-sm text-gray-500">{doneCount} / {totalFacilities} Done</span>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium">Facilities Progress</span>
+                <span className="text-sm text-gray-500">{doneCount} / {totalFacilities} Done</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-green-500 h-2 rounded-full" style={{ width: `${donePercent}%` }} />
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Outreached: {outreachedCount}/{totalFacilities} · Replied: {repliedCount}/{totalFacilities} · Classified: {classifiedCount}/{totalFacilities}
+              </p>
+            </div>
+            <Link
+              href={`/batches/${id}/submit`}
+              className="inline-flex items-center px-4 py-2 rounded-md bg-[#1B2A4A] text-white text-sm font-medium hover:bg-[#2a3f6b] shrink-0"
+            >
+              Submit to Carrier →
+            </Link>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div className="bg-green-500 h-2 rounded-full" style={{ width: `${donePercent}%` }} />
-          </div>
-          <p className="text-xs text-gray-500 mt-2">
-            Outreached: {outreachedCount}/{totalFacilities} · Replied: {repliedCount}/{totalFacilities} · Classified: {classifiedCount}/{totalFacilities}
-          </p>
         </CardContent>
       </Card>
-
-      <div className="flex justify-end">
-        <Link
-          href={`/batches/${id}/submit`}
-          className="inline-flex items-center px-4 py-2 rounded-md bg-[#1B2A4A] text-white text-sm font-medium hover:bg-[#2a3f6b]"
-        >
-          Submit to Carrier →
-        </Link>
-      </div>
 
       <div>
         <h2 className="text-lg font-semibold mb-3">Facilities ({totalFacilities})</h2>
@@ -214,14 +235,13 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                             )}
                           </div>
                         ) : (
-                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${statusColors[displayStatus] ?? "bg-gray-100 text-gray-700"}`}>
+                          <span className={`inline-flex px-2 py-1 rounded text-sm font-semibold ${statusColors[displayStatus] ?? "bg-gray-100 text-gray-700"}`}>
                             {displayStatus}
                           </span>
                         )}
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex flex-col gap-1">
-                          <Link href={`/batches/${id}/facilities/${fg.facilityId}`} className="text-sm text-blue-600 hover:text-blue-800 hover:underline">Classify</Link>
+                        <div className="flex items-center gap-2 flex-wrap">
                           {fg.outreachId && fg.outreachStatus !== "DONE" && (
                             <SendOutreachButton
                               outreachId={fg.outreachId}

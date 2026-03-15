@@ -1,8 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { db } from "@/db";
-import { auditBatches, auditPeriods, auditRecords, carriers, facilityOutreaches } from "@/db/schema";
-import { eq, inArray, sql } from "drizzle-orm";
+import { auditBatches, auditPeriods, auditRecords, carriers, facilityOutreaches, facilities } from "@/db/schema";
+import { eq, inArray, sql, countDistinct } from "drizzle-orm";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 
@@ -50,16 +50,20 @@ export default async function DashboardPage() {
       : [];
   const recordCountMap = new Map(recordCountRows.map((r) => [r.batchId, r.count]));
 
-  // 5b. Count DONE outreaches per batch
-  const doneOutreachRows =
+  // 5b. Count DONE outreaches per batch + total outreach count per batch
+  const outreachCountRows =
     batchRows.length > 0
       ? await db
-          .select({ batchId: facilityOutreaches.batchId, doneCount: sql<number>`count(*)::int` })
+          .select({
+            batchId: facilityOutreaches.batchId,
+            doneCount: sql<number>`count(*) filter (where ${facilityOutreaches.status} = 'DONE')::int`,
+            totalCount: sql<number>`count(*)::int`,
+          })
           .from(facilityOutreaches)
-          .where(eq(facilityOutreaches.status, "DONE"))
           .groupBy(facilityOutreaches.batchId)
       : [];
-  const doneOutreachMap = new Map(doneOutreachRows.map((r) => [r.batchId, r.doneCount]));
+  const doneOutreachMap = new Map(outreachCountRows.map((r) => [r.batchId, r.doneCount]));
+  const totalOutreachMap = new Map(outreachCountRows.map((r) => [r.batchId, r.totalCount]));
 
   // 6. Group batches by periodId
   const batchesByPeriod = new Map<string, typeof batchRows>();
@@ -68,6 +72,15 @@ export default async function DashboardPage() {
     if (!batchesByPeriod.has(batch.periodId)) batchesByPeriod.set(batch.periodId, []);
     batchesByPeriod.get(batch.periodId)!.push(batch);
   }
+
+  // Summary stats
+  const currentYear = new Date().getFullYear();
+  const currentYearStart = new Date(`${currentYear}-01-01`);
+  const totalBatchesThisYear = batchRows.filter(
+    (b) => b.receivedAt && new Date(b.receivedAt) >= currentYearStart
+  ).length;
+  const totalFacilitiesActive = await db.select({ count: sql<number>`count(*)::int` }).from(facilities).then((r) => r[0]?.count ?? 0);
+  const totalEmployees = recordCountRows.reduce((sum, r) => sum + r.count, 0);
 
   // 7. Build month sections
   type MonthSection = {
@@ -81,6 +94,7 @@ export default async function DashboardPage() {
       recordCount: number;
       quarterlyLabel: string | null;
       facilitiesDone: number;
+      facilitiesTotal: number;
     }>;
   };
 
@@ -116,6 +130,7 @@ export default async function DashboardPage() {
         recordCount: recordCountMap.get(b.id) ?? 0,
         quarterlyLabel: b.quarterlyLabel,
         facilitiesDone: doneOutreachMap.get(b.id) ?? 0,
+        facilitiesTotal: totalOutreachMap.get(b.id) ?? 0,
       })),
     });
   }
@@ -143,79 +158,123 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
+      {/* Summary stats */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="rounded-lg border bg-white px-4 py-3">
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Batches This Year</p>
+          <p className="text-2xl font-bold text-[#1B2A4A] mt-1">{totalBatchesThisYear}</p>
+        </div>
+        <div className="rounded-lg border bg-white px-4 py-3">
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Active Facilities</p>
+          <p className="text-2xl font-bold text-[#1B2A4A] mt-1">{totalFacilitiesActive}</p>
+        </div>
+        <div className="rounded-lg border bg-white px-4 py-3">
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Total Employees</p>
+          <p className="text-2xl font-bold text-[#1B2A4A] mt-1">{totalEmployees.toLocaleString()}</p>
+        </div>
+      </div>
+
       {sections.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           No batches yet. <Link href="/batches/new" className="text-blue-600 hover:underline">Upload your first batch.</Link>
         </div>
       ) : (
-        sections.map((section) => (
-          <section key={section.monthPeriodName}>
-            <h2 className="text-lg font-semibold text-[#1B2A4A] mb-3">{section.monthPeriodName}</h2>
-            <div className="border rounded-md overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="text-left px-4 py-2 font-medium">Carrier</th>
-                    <th className="text-right px-4 py-2 font-medium w-28">Records</th>
-                    <th className="text-left px-4 py-2 font-medium w-32">Status</th>
-                    <th className="text-left px-4 py-2 font-medium w-32">Period</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {section.batches.map((batch) => (
-                    <tr key={batch.id} className="border-t hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3">
-                        <Link href={`/batches/${batch.id}`} className="flex items-center gap-2 hover:underline">
-                          {batch.carrierLogoUrl && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={batch.carrierLogoUrl}
-                              alt={batch.carrierName ?? "Carrier"}
-                              className="h-6 w-6 object-contain rounded"
-                            />
-                          )}
-                          <span>{batch.carrierName ?? "Unknown Carrier"}</span>
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-gray-600">{batch.recordCount}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant={
-                              batch.status === "SUBMITTED"
-                                ? "default"
-                                : batch.status === "CLOSED"
-                                ? "secondary"
-                                : "outline"
-                            }
-                          >
-                            {batch.status ?? "DRAFT"}
-                          </Badge>
-                          {batch.status === "SUBMITTED" && (
-                            <span className="text-xs text-green-600 font-medium">✓ Submitted</span>
-                          )}
-                          {batch.status === "CLOSED" && (
-                            <span className="text-xs text-gray-500">Closed</span>
-                          )}
-                        </div>
-                        {batch.facilitiesDone > 0 && (
-                          <p className="text-xs text-gray-400 mt-0.5">{batch.facilitiesDone} facilities done</p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">
-                        {batch.quarterlyLabel ? (
-                          <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-medium">
-                            {batch.quarterlyLabel}
-                          </span>
-                        ) : null}
-                      </td>
+        sections.map((section) => {
+          const allSubmitted = section.batches.every((b) => b.status === "SUBMITTED");
+          const anySubmitted = section.batches.some((b) => b.status === "SUBMITTED");
+          const borderColor = allSubmitted
+            ? "border-l-4 border-l-green-400"
+            : anySubmitted
+            ? "border-l-4 border-l-yellow-400"
+            : "border-l-4 border-l-gray-200";
+
+          return (
+            <section key={section.monthPeriodName}>
+              <h2 className="text-lg font-semibold text-[#1B2A4A] mb-3">{section.monthPeriodName}</h2>
+              <div className={`border rounded-md overflow-hidden ${borderColor}`}>
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left px-4 py-2 font-medium">Carrier</th>
+                      <th className="text-right px-4 py-2 font-medium w-28">Records</th>
+                      <th className="text-left px-4 py-2 font-medium w-48">Progress</th>
+                      <th className="text-left px-4 py-2 font-medium w-32">Status</th>
+                      <th className="text-left px-4 py-2 font-medium w-32">Period</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        ))
+                  </thead>
+                  <tbody>
+                    {section.batches.map((batch) => {
+                      const progressPct = batch.facilitiesTotal > 0
+                        ? Math.round((batch.facilitiesDone / batch.facilitiesTotal) * 100)
+                        : 0;
+                      return (
+                        <tr
+                          key={batch.id}
+                          className="border-t hover:bg-gray-50 transition-colors cursor-pointer"
+                          onClick={undefined}
+                        >
+                          <td className="px-4 py-3">
+                            <Link href={`/batches/${batch.id}`} className="flex items-center gap-2 hover:underline">
+                              {batch.carrierLogoUrl && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={batch.carrierLogoUrl}
+                                  alt={batch.carrierName ?? "Carrier"}
+                                  className="h-6 w-6 object-contain rounded"
+                                />
+                              )}
+                              <span>{batch.carrierName ?? "Unknown Carrier"}</span>
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-gray-600">{batch.recordCount}</td>
+                          <td className="px-4 py-3">
+                            {batch.facilitiesTotal > 0 ? (
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                                    <div
+                                      className="bg-green-500 h-1.5 rounded-full"
+                                      style={{ width: `${progressPct}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-xs text-gray-500 tabular-nums whitespace-nowrap">
+                                    {batch.facilitiesDone}/{batch.facilitiesTotal}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-300">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge
+                              variant={
+                                batch.status === "SUBMITTED"
+                                  ? "default"
+                                  : batch.status === "CLOSED"
+                                  ? "secondary"
+                                  : "outline"
+                              }
+                            >
+                              {batch.status ?? "DRAFT"}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">
+                            {batch.quarterlyLabel ? (
+                              <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-medium">
+                                {batch.quarterlyLabel}
+                              </span>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          );
+        })
       )}
     </div>
   );
