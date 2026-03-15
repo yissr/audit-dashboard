@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import ClassifyRow from "./ClassifyRow";
 import FacilityActions from "./FacilityActions";
 import EditIdentityName from "./EditIdentityName";
+import EmailPanel from "./EmailPanel";
 
 const classificationColors: Record<string, string> = {
   STILL_EMPLOYED: "bg-green-100 text-green-700",
@@ -102,6 +103,8 @@ export default async function ClassificationPage({
 
   const totalCount = batch.periodId ? identityMap.size : records.length;
 
+  const emailHtml = outreach?.emailBodyHtml ?? null;
+
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
@@ -140,27 +143,31 @@ export default async function ClassificationPage({
         </div>
       </div>
 
-      {/* Filter bar */}
-      <div className="flex items-center gap-2 text-sm">
-        <Link
-          href={`/batches/${batchId}/facilities/${facilityId}`}
-          className={`px-3 py-1.5 rounded-md transition-colors ${!show ? "bg-[#1B2A4A] text-white font-medium" : "text-gray-600 hover:bg-gray-100"}`}
-        >
-          All
-        </Link>
-        <Link
-          href={`/batches/${batchId}/facilities/${facilityId}?show=unclassified`}
-          className={`px-3 py-1.5 rounded-md transition-colors ${show === "unclassified" ? "bg-[#1B2A4A] text-white font-medium" : "text-gray-600 hover:bg-gray-100"}`}
-        >
-          Unclassified
-        </Link>
-        <Link
-          href={`/batches/${batchId}/facilities/${facilityId}?show=removed`}
-          className={`px-3 py-1.5 rounded-md transition-colors ${show === "removed" ? "bg-[#1B2A4A] text-white font-medium" : "text-gray-600 hover:bg-gray-100"}`}
-        >
-          Removed
-        </Link>
-      </div>
+      {/* Split layout: email panel + employee list */}
+      <div className="flex gap-6 items-start">
+        {emailHtml && <EmailPanel htmlBody={emailHtml} />}
+        <div className="flex-1 min-w-0 space-y-4">
+        {/* Filter bar */}
+        <div className="flex items-center gap-2 text-sm">
+          <Link
+            href={`/batches/${batchId}/facilities/${facilityId}`}
+            className={`px-3 py-1.5 rounded-md transition-colors ${!show ? "bg-[#1B2A4A] text-white font-medium" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            All
+          </Link>
+          <Link
+            href={`/batches/${batchId}/facilities/${facilityId}?show=unclassified`}
+            className={`px-3 py-1.5 rounded-md transition-colors ${show === "unclassified" ? "bg-[#1B2A4A] text-white font-medium" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            Unclassified
+          </Link>
+          <Link
+            href={`/batches/${batchId}/facilities/${facilityId}?show=removed`}
+            className={`px-3 py-1.5 rounded-md transition-colors ${show === "removed" ? "bg-[#1B2A4A] text-white font-medium" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            Removed
+          </Link>
+        </div>
 
       {batch.periodId ? (
         // Period-aware view: show identities
@@ -265,5 +272,7 @@ export default async function ClassificationPage({
         </div>
       )}
     </div>
+        </div>
+      </div>
   );
 }

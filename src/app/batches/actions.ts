@@ -1,6 +1,7 @@
 "use server";
 import { db } from "@/db";
-import { auditBatches, auditRecords, auditPeriods, carriers, facilities, facilityOutreaches, employeeIdentities } from "@/db/schema";
+import { auditBatches, auditRecords, auditPeriods, carriers, facilities, facilityOutreaches, employeeIdentities, simOutbox } from "@/db/schema";
+import { getSimulationMode } from "@/app/settings/actions";
 import { autoDetectAndParse, autoDetectAndPreview } from "@/lib/parsers/auto-detect";
 import { revalidatePath } from "next/cache";
 import { eq, and, lte, isNotNull, sql, inArray } from "drizzle-orm";
@@ -362,12 +363,24 @@ export async function wakeFacility(outreachId: string): Promise<void> {
 }
 
 export async function logReminder(outreachId: string): Promise<void> {
-  const existing = await db
-    .select({ id: facilityOutreaches.id, batchId: facilityOutreaches.batchId })
+  const [outreach] = await db
+    .select({
+      id: facilityOutreaches.id,
+      batchId: facilityOutreaches.batchId,
+      facilityId: facilityOutreaches.facilityId,
+      emailBodyHtml: facilityOutreaches.emailBodyHtml,
+      graphConversationId: facilityOutreaches.graphConversationId,
+      reminderCount: facilityOutreaches.reminderCount,
+    })
     .from(facilityOutreaches)
     .where(eq(facilityOutreaches.id, outreachId));
 
-  if (existing.length === 0) throw new Error(`Outreach record not found: ${outreachId}`);
+  if (!outreach) throw new Error(`Outreach record not found: ${outreachId}`);
+
+  const [facility] = await db
+    .select({ name: facilities.name, contactEmail: facilities.contactEmail })
+    .from(facilities)
+    .where(eq(facilities.id, outreach.facilityId));
 
   await db
     .update(facilityOutreaches)
@@ -377,7 +390,23 @@ export async function logReminder(outreachId: string): Promise<void> {
     })
     .where(eq(facilityOutreaches.id, outreachId));
 
-  revalidatePath(`/batches/${existing[0].batchId}`);
+  const simMode = await getSimulationMode();
+  if (simMode && outreach.emailBodyHtml) {
+    const reminderNum = (outreach.reminderCount ?? 0) + 1;
+    const toAddress = facility?.contactEmail ?? `sim-${outreach.facilityId}@simulation.local`;
+    const subject = `Reminder #${reminderNum}: Workers' Compensation Audit — ${facility?.name ?? "Facility"}`;
+    await db.insert(simOutbox).values({
+      outreachId,
+      facilityName: facility?.name ?? "Unknown Facility",
+      toAddress,
+      subject,
+      htmlBody: outreach.emailBodyHtml,
+      conversationId: outreach.graphConversationId ?? `sim-conv-${outreachId}`,
+    });
+  }
+
+  revalidatePath(`/batches/${outreach.batchId}`);
+  revalidatePath("/sim-inbox");
   revalidatePath("/");
 }
 
