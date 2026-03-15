@@ -149,3 +149,20 @@ export const auditLogs = pgTable("audit_logs", {
   afterState: jsonb("after_state"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
+export const simOutbox = pgTable("sim_outbox", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  outreachId: uuid("outreach_id").notNull().references(() => facilityOutreaches.id),
+  facilityName: text("facility_name").notNull(),
+  toAddress: text("to_address").notNull(),
+  subject: text("subject").notNull(),
+  htmlBody: text("html_body").notNull(),
+  conversationId: text("conversation_id").notNull(),
+  repliedAt: timestamp("replied_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});

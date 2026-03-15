@@ -1,10 +1,11 @@
 "use server";
 
 import { db } from "@/db";
-import { auditRecords, auditPeriods, auditBatches, facilityOutreaches, employeeIdentities, facilities } from "@/db/schema";
+import { auditRecords, auditPeriods, auditBatches, facilityOutreaches, employeeIdentities, facilities, simOutbox } from "@/db/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { sendGraphEmail } from "@/lib/graph-client";
+import { getSimulationMode } from "@/app/settings/actions";
 
 export async function sendOutreachEmail(
   outreachId: string,
@@ -20,6 +21,7 @@ export async function sendOutreachEmail(
       outreachId: facilityOutreaches.id,
       batchId: facilityOutreaches.batchId,
       facilityId: facilityOutreaches.facilityId,
+      facilityName: facilities.name,
       contactEmail: facilities.contactEmail,
       periodName: auditPeriods.name,
     })
@@ -30,7 +32,6 @@ export async function sendOutreachEmail(
     .where(eq(facilityOutreaches.id, outreachId));
 
   if (!row) throw new Error("Outreach not found");
-  if (!row.contactEmail) throw new Error("Facility has no contact email");
 
   const escaped = bodyText
     .replace(/&/g, "&amp;")
@@ -38,23 +39,53 @@ export async function sendOutreachEmail(
     .replace(/>/g, "&gt;");
   const htmlBody = `<html><body><pre style="font-family:Arial,sans-serif;white-space:pre-wrap">${escaped}</pre></body></html>`;
 
-  const result = await sendGraphEmail({
-    to: row.contactEmail,
-    cc,
-    subject,
-    htmlBody,
-  });
+  const simMode = await getSimulationMode();
 
-  await db
-    .update(facilityOutreaches)
-    .set({
-      status: "SENT",
-      sentAt: new Date(),
-      graphMessageId: result.messageId,
-      graphConversationId: result.conversationId,
-      emailBodyHtml: htmlBody,
-    })
-    .where(eq(facilityOutreaches.id, outreachId));
+  if (simMode) {
+    const toAddress = row.contactEmail ?? `sim-${row.facilityId}@simulation.local`;
+    const mockMessageId = `sim-msg-${Date.now()}`;
+    const mockConversationId = `sim-conv-${outreachId}`;
+
+    await db
+      .update(facilityOutreaches)
+      .set({
+        status: "SENT",
+        sentAt: new Date(),
+        graphMessageId: mockMessageId,
+        graphConversationId: mockConversationId,
+        emailBodyHtml: htmlBody,
+      })
+      .where(eq(facilityOutreaches.id, outreachId));
+
+    await db.insert(simOutbox).values({
+      outreachId,
+      facilityName: row.facilityName ?? "Unknown Facility",
+      toAddress,
+      subject,
+      htmlBody,
+      conversationId: mockConversationId,
+    });
+  } else {
+    if (!row.contactEmail) throw new Error("Facility has no contact email");
+
+    const result = await sendGraphEmail({
+      to: row.contactEmail,
+      cc,
+      subject,
+      htmlBody,
+    });
+
+    await db
+      .update(facilityOutreaches)
+      .set({
+        status: "SENT",
+        sentAt: new Date(),
+        graphMessageId: result.messageId,
+        graphConversationId: result.conversationId,
+        emailBodyHtml: htmlBody,
+      })
+      .where(eq(facilityOutreaches.id, outreachId));
+  }
 
   revalidatePath(`/batches/${row.batchId}`);
   revalidatePath("/");

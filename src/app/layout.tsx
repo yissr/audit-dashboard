@@ -4,6 +4,8 @@ import "./globals.css";
 import Link from "next/link";
 import Image from "next/image";
 import NavLinks from "./NavLinks";
+import SimulationToggle from "./SimulationToggle";
+import { getSimulationMode } from "./settings/actions";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -12,7 +14,9 @@ export const metadata: Metadata = {
   description: "Workers' Compensation Audit Dashboard",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const simEnabled = await getSimulationMode();
+
   return (
     <html lang="en">
       <body className={inter.className}>
@@ -23,7 +27,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="font-bold text-lg leading-tight">Empire Benefit Solutions</span>
             </Link>
             <div className="h-5 w-px bg-white/20 mx-1" />
-            <NavLinks />
+            <NavLinks simEnabled={simEnabled} />
+            <SimulationToggle initialEnabled={simEnabled} />
           </div>
         </nav>
         <main className="max-w-7xl mx-auto px-4 py-6">{children}</main>

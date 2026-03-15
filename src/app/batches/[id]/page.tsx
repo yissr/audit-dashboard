@@ -10,6 +10,7 @@ import FacilityRowActions from "./FacilityRowActions";
 import OutreachEmailThread from "./OutreachEmailThread";
 import SendOutreachButton from "./SendOutreachButton";
 import { checkAndWakeExpiredSnoozes } from "../actions";
+import { getSimulationMode } from "@/app/settings/actions";
 import Link from "next/link";
 
 const statusColors: Record<string, string> = {
@@ -49,6 +50,8 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
 
   // Wake any expired snoozes before rendering
   await checkAndWakeExpiredSnoozes(id);
+
+  const simMode = await getSimulationMode();
 
   const facilityGroups = await db
     .select({
@@ -249,6 +252,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                               facilityEmail={fg.contactEmail ?? null}
                               savedCcEmails={JSON.parse(fg.ccEmailsRaw ?? "[]") as string[]}
                               periodName={periodName}
+                              simMode={simMode}
                             />
                           )}
                           {fg.outreachId && (

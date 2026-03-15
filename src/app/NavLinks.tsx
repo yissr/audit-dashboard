@@ -11,12 +11,20 @@ const navLinks = [
   { href: "/periods", label: "Periods" },
 ];
 
-export default function NavLinks() {
+interface Props {
+  simEnabled: boolean;
+}
+
+export default function NavLinks({ simEnabled }: Props) {
   const pathname = usePathname();
+
+  const links = simEnabled
+    ? [...navLinks, { href: "/sim-inbox", label: "⚡ Sim Inbox" }]
+    : navLinks;
 
   return (
     <nav className="flex items-center gap-1">
-      {navLinks.map(({ href, label }) => {
+      {links.map(({ href, label }) => {
         const isActive =
           href === "/" ? pathname === "/" : pathname.startsWith(href);
         return (

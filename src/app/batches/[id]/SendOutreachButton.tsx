@@ -9,6 +9,7 @@ interface Props {
   facilityEmail: string | null;
   savedCcEmails: string[];
   periodName: string;
+  simMode?: boolean;
 }
 
 function isValidEmail(email: string): boolean {
@@ -21,6 +22,7 @@ export default function SendOutreachButton({
   facilityEmail,
   savedCcEmails,
   periodName,
+  simMode = false,
 }: Props) {
   const defaultSubject = `Workers' Compensation Audit — ${facilityName} — ${periodName}`;
   const defaultBody = `Dear ${facilityName},
@@ -82,15 +84,21 @@ Empire Benefit Solutions`;
   }
 
   if (!open) {
+    const canSend = simMode || !!facilityEmail;
     return (
-      <button
-        onClick={() => setOpen(true)}
-        disabled={!facilityEmail}
-        title={!facilityEmail ? "No contact email on file" : undefined}
-        className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        Send Email
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => setOpen(true)}
+          disabled={!canSend}
+          title={!canSend ? "No contact email on file" : undefined}
+          className="text-xs border border-gray-300 rounded px-2 py-0.5 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Send Email
+        </button>
+        {simMode && (
+          <span className="text-xs bg-amber-100 text-amber-700 rounded px-1 py-0.5 font-medium">⚡ Sim</span>
+        )}
+      </div>
     );
   }
 
@@ -101,7 +109,10 @@ Empire Benefit Solutions`;
 
         <div>
           <label className="text-xs font-medium text-gray-500 block mb-1">To:</label>
-          <div className="text-sm text-gray-700 bg-gray-50 border rounded px-3 py-1.5">{facilityEmail}</div>
+          <div className="text-sm text-gray-700 bg-gray-50 border rounded px-3 py-1.5">
+            {simMode && !facilityEmail ? "[Simulation]" : facilityEmail}
+            {simMode && <span className="ml-2 text-xs text-amber-600 font-medium">⚡ Sim</span>}
+          </div>
         </div>
 
         <div>
