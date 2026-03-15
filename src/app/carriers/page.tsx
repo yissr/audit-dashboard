@@ -43,14 +43,14 @@ export default async function CarriersPage() {
               {carrierList.map((c) => (
                 <tr key={c.id} className="border-b hover:bg-gray-50">
                   <td className="py-3 px-4">
-                    <div className="flex items-center gap-2">
-                      {c.logoUrl && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={c.logoUrl} alt={`${c.name} logo`} className="h-6 w-auto object-contain rounded" />
-                      )}
-                      <Link href={`/carriers/${c.id}`} className="font-medium text-[#1B2A4A] hover:underline">
+                    <div className="flex items-center">
+                      <Link href={`/carriers/${c.id}`} className="font-medium text-[#1B2A4A] hover:underline w-48 shrink-0">
                         {c.name}
                       </Link>
+                      {c.logoUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={c.logoUrl} alt={`${c.name} logo`} className="h-8 w-auto object-contain" />
+                      )}
                     </div>
                   </td>
                   <td className="py-3 px-4 text-gray-500 font-mono text-xs">{c.emailPattern ?? "—"}</td>
