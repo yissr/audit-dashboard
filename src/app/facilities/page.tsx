@@ -6,7 +6,13 @@ import Link from "next/link";
 import FacilitySearch from "./FacilitySearch";
 
 export default async function FacilitiesPage() {
-  const facilityList = await listFacilities();
+  const rawList = await listFacilities();
+  const facilityList = rawList.map((f) => ({
+    id: f.id,
+    name: f.name,
+    contactEmail: f.contactEmail ?? null,
+    contactName: f.contactName ?? null,
+  }));
 
   return (
     <div className="space-y-6">
