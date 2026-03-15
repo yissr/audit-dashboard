@@ -157,7 +157,9 @@ export const settings = pgTable("settings", {
 
 export const simOutbox = pgTable("sim_outbox", {
   id: uuid("id").primaryKey().defaultRandom(),
-  outreachId: uuid("outreach_id").notNull().references(() => facilityOutreaches.id),
+  outreachId: uuid("outreach_id").references(() => facilityOutreaches.id),
+  batchId: uuid("batch_id").references(() => auditBatches.id),
+  entryType: text("entry_type").notNull().default("outreach"), // "outreach" | "carrier_submission"
   facilityName: text("facility_name").notNull(),
   toAddress: text("to_address").notNull(),
   subject: text("subject").notNull(),

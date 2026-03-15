@@ -1,10 +1,11 @@
 "use server";
 
 import { db } from "@/db";
-import { auditBatches, auditRecords, carriers, facilities, employeeIdentities } from "@/db/schema";
+import { auditBatches, auditRecords, carriers, facilities, employeeIdentities, simOutbox } from "@/db/schema";
 import { eq, and, ne, isNotNull } from "drizzle-orm";
 import { sendEmail } from "@/lib/email";
 import { revalidatePath } from "next/cache";
+import { getSimulationMode } from "@/app/settings/actions";
 
 export interface TerminationRecord {
   employeeName: string;
@@ -189,15 +190,29 @@ export async function submitBatch(batchId: string): Promise<{ success: boolean; 
   const csv = await generateSubmissionCsv(data.terminations);
   const subject = `Workers' Compensation Audit — Termination Report — ${carrierName}`;
 
-  const result = await sendEmail({
-    to: process.env.CARRIER_EMAIL_TO ?? "carrier@example.com",
-    subject,
-    html,
-    csvAttachment: {
-      filename: `termination-report-${batchId.slice(0, 8)}.csv`,
-      content: csv,
-    },
-  });
+  const simMode = await getSimulationMode();
+
+  if (simMode) {
+    await db.insert(simOutbox).values({
+      batchId,
+      entryType: "carrier_submission",
+      facilityName: carrierName,
+      toAddress: process.env.CARRIER_EMAIL_TO ?? "carrier@example.com",
+      subject,
+      htmlBody: html,
+      conversationId: `sim-carrier-${batchId.slice(0, 8)}-${Date.now()}`,
+    });
+  } else {
+    await sendEmail({
+      to: process.env.CARRIER_EMAIL_TO ?? "carrier@example.com",
+      subject,
+      html,
+      csvAttachment: {
+        filename: `termination-report-${batchId.slice(0, 8)}.csv`,
+        content: csv,
+      },
+    });
+  }
 
   await db
     .update(auditBatches)
@@ -208,5 +223,5 @@ export async function submitBatch(batchId: string): Promise<{ success: boolean; 
   revalidatePath("/batches");
   revalidatePath("/");
 
-  return { success: true, dryRun: result.dryRun };
+  return { success: true, dryRun: simMode };
 }
