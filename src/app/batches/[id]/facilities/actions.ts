@@ -33,11 +33,35 @@ export async function sendOutreachEmail(
 
   if (!row) throw new Error("Outreach not found");
 
-  const escaped = bodyText
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  const htmlBody = `<html><body><pre style="font-family:Arial,sans-serif;white-space:pre-wrap">${escaped}</pre></body></html>`;
+  // Fetch employee names for this facility in this batch
+  const batchRecords = await db
+    .select({ employeeName: auditRecords.employeeName, identityId: auditRecords.identityId })
+    .from(auditRecords)
+    .where(and(eq(auditRecords.batchId, row.batchId), eq(auditRecords.facilityId, row.facilityId)));
+
+  // If period-aware, use identity canonical names (deduplicated)
+  let employeeNames: string[] = [];
+  if (batchRecords.some((r) => r.identityId)) {
+    const identityIds = [...new Set(batchRecords.map((r) => r.identityId).filter((x): x is string => x !== null))];
+    if (identityIds.length > 0) {
+      const identities = await db
+        .select({ canonicalName: employeeIdentities.canonicalName })
+        .from(employeeIdentities)
+        .where(inArray(employeeIdentities.id, identityIds));
+      employeeNames = identities.map((i) => i.canonicalName).sort();
+    }
+  } else {
+    employeeNames = [...new Set(batchRecords.map((r) => r.employeeName))].sort();
+  }
+
+  const employeeListText = employeeNames.length > 0
+    ? `\n\nEmployee List (${employeeNames.length} employees):\n${employeeNames.map((n, i) => `${i + 1}. ${n}`).join("\n")}`
+    : "";
+
+  const fullBodyText = bodyText + employeeListText;
+
+  const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const htmlBody = `<html><body><pre style="font-family:Arial,sans-serif;white-space:pre-wrap">${escape(fullBodyText)}</pre></body></html>`;
 
   const simMode = await getSimulationMode();
 
