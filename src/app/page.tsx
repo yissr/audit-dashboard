@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { db } from "@/db";
 import { auditBatches, auditPeriods, auditRecords, carriers, facilityOutreaches, facilities } from "@/db/schema";
-import { eq, inArray, sql, countDistinct } from "drizzle-orm";
+import { eq, inArray, sql, and, gte, lte } from "drizzle-orm";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 
@@ -73,14 +73,39 @@ export default async function DashboardPage() {
     batchesByPeriod.get(batch.periodId)!.push(batch);
   }
 
-  // Summary stats
-  const currentYear = new Date().getFullYear();
-  const currentYearStart = new Date(`${currentYear}-01-01`);
-  const totalBatchesThisYear = batchRows.filter(
-    (b) => b.receivedAt && new Date(b.receivedAt) >= currentYearStart
-  ).length;
-  const totalFacilitiesActive = await db.select({ count: sql<number>`count(*)::int` }).from(facilities).then((r) => r[0]?.count ?? 0);
-  const totalEmployees = recordCountRows.reduce((sum, r) => sum + r.count, 0);
+  // Summary stats — current-month audit progress
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  const currentMonthBatchIds = batchRows
+    .filter((b) => b.receivedAt && new Date(b.receivedAt) >= monthStart && new Date(b.receivedAt) <= monthEnd)
+    .map((b) => b.id);
+
+  let statReplied = 0;
+  let statIncomplete = 0;
+  let statDone = 0;
+  let statTotal = 0;
+
+  if (currentMonthBatchIds.length > 0) {
+    const outreachStats = await db
+      .select({
+        status: facilityOutreaches.status,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(facilityOutreaches)
+      .where(inArray(facilityOutreaches.batchId, currentMonthBatchIds))
+      .groupBy(facilityOutreaches.status);
+
+    for (const row of outreachStats) {
+      statTotal += row.count;
+      if (row.status === "REPLIED" || row.status === "DONE") statReplied += row.count;
+      if (row.status === "INCOMPLETE") statIncomplete += row.count;
+      if (row.status === "DONE") statDone += row.count;
+    }
+  }
+
+  const statDonePct = statTotal > 0 ? Math.round((statDone / statTotal) * 100) : 0;
 
   // 7. Build month sections
   type MonthSection = {
@@ -158,19 +183,21 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {/* Summary stats */}
+      {/* Summary stats — current month */}
       <div className="grid grid-cols-3 gap-4">
         <div className="rounded-lg border bg-white px-4 py-3">
-          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Batches This Year</p>
-          <p className="text-2xl font-bold text-[#1B2A4A] mt-1">{totalBatchesThisYear}</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Facilities Replied</p>
+          <p className="text-2xl font-bold text-[#1B2A4A] mt-1">{statReplied}</p>
         </div>
         <div className="rounded-lg border bg-white px-4 py-3">
-          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Active Facilities</p>
-          <p className="text-2xl font-bold text-[#1B2A4A] mt-1">{totalFacilitiesActive}</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Incomplete</p>
+          <p className="text-2xl font-bold text-[#1B2A4A] mt-1">{statIncomplete}</p>
         </div>
         <div className="rounded-lg border bg-white px-4 py-3">
-          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Total Employees</p>
-          <p className="text-2xl font-bold text-[#1B2A4A] mt-1">{totalEmployees.toLocaleString()}</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Done This Month</p>
+          <p className="text-2xl font-bold text-[#1B2A4A] mt-1">
+            {statDone} / {statTotal} ({statDonePct}%)
+          </p>
         </div>
       </div>
 
