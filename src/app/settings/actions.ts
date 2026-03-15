@@ -6,11 +6,16 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export async function getSimulationMode(): Promise<boolean> {
-  const [row] = await db
-    .select({ value: settings.value })
-    .from(settings)
-    .where(eq(settings.key, "simulation_mode"));
-  return row?.value === "true";
+  try {
+    const [row] = await db
+      .select({ value: settings.value })
+      .from(settings)
+      .where(eq(settings.key, "simulation_mode"));
+    return row?.value === "true";
+  } catch {
+    // Table doesn't exist yet — default to false
+    return false;
+  }
 }
 
 export async function setSimulationMode(enabled: boolean): Promise<void> {
